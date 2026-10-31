@@ -4,7 +4,7 @@ const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
-const QUICK_ENTRY_TITLE = /what do you need|qué necesitas|quick\s*(chat|entry|ask)|ask claude/i;
+const QUICK_ENTRY_TITLE = /what do you need|what can i help|qué necesitas|que necesitas|quick\s*(chat|entry|ask)|ask claude/i;
 
 function isQuickEntryWindow(windowInfo) {
   const title = String(windowInfo.title || '');
