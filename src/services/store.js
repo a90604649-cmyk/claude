@@ -13,7 +13,11 @@ const DEFAULT_DATA = Object.freeze({
   monitor: {
     lastCheckAt: null,
     claudeRunning: null,
-    limitStatus: 'unknown'
+    limitStatus: 'unknown',
+    claudeMainWindowStatus: 'unknown',
+    claudeMainWindowTitle: null,
+    lastMainWindowCheckAt: null,
+    quickEntryDetected: false
   }
 });
 
