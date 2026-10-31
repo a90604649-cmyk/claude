@@ -8,10 +8,11 @@ const execFileAsync = promisify(execFile);
 
 const LIMIT_PATTERNS = [
   /usage limit reached/i,
-  /you(?:'|’)ve reached your (?:usage |session )?limit/i,
-  /you have reached your (?:usage |session )?limit/i,
+  /you(?:'|’)ve reached your (?:\\d+[- ]hour )?(?:usage |session )?limit/i,
+  /you have reached your (?:\\d+[- ]hour )?(?:usage |session )?limit/i,
+  /you(?:'|’)ve hit your (?:usage )?limit/i,
   /reached your usage limit/i,
-  /has alcanzado tu l[ií]mite/i,
+  /has alcanzado (?:tu|el) l[ií]mite/i,
   /l[ií]mite de uso alcanzad[oa]/i,
   /l[ií]mite de sesi[oó]n alcanzad[oa]/i
 ];
