@@ -1,5 +1,9 @@
 name: Verify and Build
 
+concurrency:
+  group: autocontinue-beta3-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
