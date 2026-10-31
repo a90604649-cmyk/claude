@@ -305,7 +305,7 @@ function registerIpcHandlers() {
     const policy = sanitizeExecutionPolicySettings(input, store.snapshot().settings);
     await store.updateSettings(policy);
     await store.log('info', 'Se actualizaron las reglas de horario escolar y protección de juegos.', policy);
-    recoveryController?.schedule();
+    await recoveryController?.schedule();
     return getDashboardSnapshot();
   });
 
@@ -460,6 +460,7 @@ if (hasSingleInstance) {
       closeMainWindow: closeClaudeMainWindow,
       sendMessage: sendContinuationMessage,
       scheduleWake: (dueAt) => scheduleRecoveryTask(app, dueAt),
+      cancelWake: removeRecoveryTask,
       onIdleWait: async () => {
         isQuitting = true;
         app.quit();
