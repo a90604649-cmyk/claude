@@ -522,6 +522,12 @@ if (hasSingleInstance) {
     await scheduler.start();
     createMainWindow({ hidden: startedAtLogin || startedByScheduledCheck });
     await recoveryController.start({ scheduledCheck: startedByScheduledCheck });
+    if (startedByScheduledCheck && !store.snapshot().settings.automationEnabled) {
+      await store.log('info', 'La comprobación programada se canceló porque AutoContinue está desactivado.');
+      isQuitting = true;
+      app.quit();
+      return;
+    }
     if (scheduledCheckPending) {
       scheduledCheckPending = false;
       recoveryController.tick('comprobación programada de Windows').catch(() => {});
