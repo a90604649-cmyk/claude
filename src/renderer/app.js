@@ -22,6 +22,10 @@ const elements = {
   recoveryStatus: $('recovery-status'),
   recoveryDetail: $('recovery-detail'),
   fallbackWait: $('fallback-wait'),
+  schoolScheduleToggle: $('school-schedule-toggle'),
+  schoolStartTime: $('school-start-time'),
+  schoolEndTime: $('school-end-time'),
+  gameProtectionToggle: $('game-protection-toggle'),
   recoveryInterval: $('recovery-interval'),
   recoveryCheck: $('recovery-check'),
   limitCheckStatus: $('limit-check-status'),
@@ -93,7 +97,7 @@ function renderSnapshot(snapshot) {
 
   const settings = snapshot.settings || {};
   const monitor = snapshot.monitor || {};
-  elements.version.textContent = `V${snapshot.appVersion || '1.0.0'} · Beta 3`;
+  elements.version.textContent = `V${snapshot.appVersion || '1.0.0'} · Beta 4`;
   elements.monitoringToggle.checked = Boolean(settings.monitoringEnabled);
   elements.interval.value = String(settings.checkIntervalMinutes || 5);
   elements.startupToggle.checked = Boolean(
@@ -176,6 +180,10 @@ function renderSnapshot(snapshot) {
   elements.automationToggle.disabled = !settings.conversationId || !settings.conversationVerified;
   elements.fallbackWait.value = String(settings.fallbackWaitMinutes || 300);
   elements.recoveryInterval.value = String(settings.recoveryCheckIntervalMinutes || 1);
+  elements.schoolScheduleToggle.checked = settings.schoolScheduleEnabled !== false;
+  elements.schoolStartTime.value = settings.schoolStartTime || '13:00';
+  elements.schoolEndTime.value = settings.schoolEndTime || '18:00';
+  elements.gameProtectionToggle.checked = settings.gameProtectionEnabled !== false;
 
   if (!settings.conversationId) {
     elements.conversationStatus.textContent = 'Todavía no hay una conversación guardada.';
@@ -193,6 +201,8 @@ function renderSnapshot(snapshot) {
     awaiting_confirmation: 'Esperando confirmación',
     needs_conversation: 'Falta guardar el chat',
     waiting_limit: 'Esperando que se restablezca',
+    blocked_schedule: 'Pausado por horario de clases',
+    blocked_by_game: 'Pausado por un juego abierto',
     opening_claude: 'Abriendo Claude',
     opening_original_chat: 'Abriendo chat original',
     inspection_unavailable: 'No se pudo comprobar',
@@ -319,6 +329,29 @@ elements.recoveryInterval.addEventListener('change', async () => {
     showToast(error.message || 'No se pudo cambiar la frecuencia.');
   }
 });
+
+async function saveExecutionPolicy() {
+  const settings = {
+    schoolScheduleEnabled: elements.schoolScheduleToggle.checked,
+    schoolStartTime: elements.schoolStartTime.value,
+    schoolEndTime: elements.schoolEndTime.value,
+    gameProtectionEnabled: elements.gameProtectionToggle.checked
+  };
+
+  try {
+    const snapshot = await window.autoContinue.setExecutionPolicy(settings);
+    renderSnapshot(snapshot);
+    showToast('Reglas inteligentes guardadas.');
+  } catch (error) {
+    showToast(error.message || 'No se pudieron guardar las reglas.');
+    await loadSnapshot();
+  }
+}
+
+elements.schoolScheduleToggle.addEventListener('change', saveExecutionPolicy);
+elements.schoolStartTime.addEventListener('change', saveExecutionPolicy);
+elements.schoolEndTime.addEventListener('change', saveExecutionPolicy);
+elements.gameProtectionToggle.addEventListener('change', saveExecutionPolicy);
 
 elements.fallbackWait.addEventListener('change', async () => {
   try {
