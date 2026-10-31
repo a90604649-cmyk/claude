@@ -7,7 +7,9 @@
     "node": ">=20.19.0"
   },
   "scripts": {
+    "start": "electron .",
     "dev": "electron .",
+    "test": "node --test",
     "dist": "electron-builder --win nsis",
     "dist:portable": "electron-builder --win portable",
     "pack": "electron-builder --dir"
