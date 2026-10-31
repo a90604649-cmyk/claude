@@ -225,25 +225,30 @@ function registerIpcHandlers() {
   });
 }
 
-app.whenReady().then(async () => {
-  app.setAppUserModelId('local.claudeautocontinue.app');
+if (hasSingleInstance) {
+  app.whenReady().then(async () => {
+    app.setAppUserModelId('local.claudeautocontinue.app');
 
-  store = new AppStore(app.getPath('userData'));
-  await store.load();
-  await askAboutWindowsStartup();
+    store = new AppStore(app.getPath('userData'));
+    await store.load();
+    await askAboutWindowsStartup();
 
-  scheduler = new MonitorScheduler({
-    store,
-    onUpdate: sendMonitorUpdate
+    scheduler = new MonitorScheduler({
+      store,
+      onUpdate: sendMonitorUpdate
+    });
+
+    registerIpcHandlers();
+    createTray();
+    await scheduler.start();
+    createMainWindow({ hidden: startedAtLogin });
+
+    app.on('activate', () => showMainWindow());
+  }).catch((error) => {
+    dialog.showErrorBox(APP_NAME, `No se pudo iniciar la aplicación.\n\n${error.message}`);
+    app.quit();
   });
-
-  registerIpcHandlers();
-  createTray();
-  await scheduler.start();
-  createMainWindow({ hidden: startedAtLogin });
-
-  app.on('activate', () => showMainWindow());
-});
+}
 
 app.on('before-quit', () => {
   isQuitting = true;
