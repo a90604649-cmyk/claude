@@ -187,3 +187,20 @@ footer { padding: 18px 2px 0; color: #697691; font-size: 9px; }
   .intro-orbit { margin-right: 10px; transform: scale(.82); }
   .bottom-grid, .automation-grid { grid-template-columns: 1fr; }
 }
+
+
+.policy-panel {
+  margin-top: 18px; padding: 14px; border: 1px solid #303c59;
+  border-radius: 10px; background: rgba(10, 17, 32, .55);
+}
+.policy-panel > .eyebrow { margin-bottom: 8px; }
+.policy-panel .switch-row { margin-top: 12px; }
+.time-range {
+  display: flex; flex-wrap: wrap; gap: 14px; padding: 12px 0 2px 2px;
+  color: #aeb8cd; font-size: 10px;
+}
+.time-range label { display: flex; align-items: center; gap: 7px; }
+.time-range input {
+  color: #e8ecf8; background: #202b43; border: 1px solid #34415b;
+  border-radius: 7px; padding: 6px 8px; font: 11px "Segoe UI", Arial, sans-serif;
+}
