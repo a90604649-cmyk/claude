@@ -14,7 +14,9 @@ const LIMIT_PATTERNS = [
   /reached your usage limit/i,
   /has alcanzado (?:tu|el) l[ií]mite/i,
   /l[ií]mite de uso alcanzad[oa]/i,
-  /l[ií]mite de sesi[oó]n alcanzad[oa]/i
+  /l[ií]mite de sesi[oó]n alcanzad[oa]/i,
+  /te quedaste sin.{0,100}\\bmensajes?\\b/i,
+  /sin\\s+mensajes?\\s+(?:gratuitos|gratis)/i
 ];
 
 function parseResetTime(text, now = new Date()) {
@@ -26,7 +28,8 @@ function parseResetTime(text, now = new Date()) {
 
   let hour = Number(match[1]);
   const minute = Number(match[2]);
-  const meridiem = match[3]?.toUpperCase();
+  const rawMeridiem = match[3]?.toUpperCase().replace(/[.\\s]/g, '');
+  const meridiem = rawMeridiem === 'AM' ? 'AM' : rawMeridiem === 'PM' ? 'PM' : undefined;
 
   if (minute > 59 || hour > 23 || (meridiem && (hour < 1 || hour > 12))) return null;
 
