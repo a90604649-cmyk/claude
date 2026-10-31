@@ -12,7 +12,7 @@ const DEFAULT_POLICY = Object.freeze({
 });
 
 function parseClock(value, fallback) {
-  const match = String(value || '').match(/^(\\d{2}):(\\d{2})$/);
+  const match = String(value || '').match(/^(\d{2}):(\d{2})$/);
   if (!match) return parseClock(fallback, '13:00');
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
@@ -34,8 +34,8 @@ function sanitizeExecutionPolicySettings(input = {}, current = DEFAULT_POLICY) {
 
   const start = parseClock(next.schoolStartTime, DEFAULT_POLICY.schoolStartTime);
   const end = parseClock(next.schoolEndTime, DEFAULT_POLICY.schoolEndTime);
-  if (!/^\\d{2}:\\d{2}$/.test(next.schoolStartTime)
-      || !/^\\d{2}:\\d{2}$/.test(next.schoolEndTime)
+  if (!/^\d{2}:\d{2}$/.test(next.schoolStartTime)
+      || !/^\d{2}:\d{2}$/.test(next.schoolEndTime)
       || start >= end) {
     throw new Error('El horario escolar debe tener horas válidas y la hora de inicio debe ser anterior a la hora final.');
   }
@@ -70,17 +70,17 @@ function identifyBlockingGame(processes = []) {
     const name = String(processInfo?.name || processInfo?.Name || '').split(/[\\/]/).pop();
     const commandLine = String(processInfo?.commandLine || processInfo?.CommandLine || '');
 
-    if (/^ck[\\s_-]*launcher\\.exe$/i.test(name)) {
+    if (/^ck[\s_-]*launcher\.exe$/i.test(name)) {
       return { id: 'ck-launcher', name: 'CK Launcher', processName: name };
     }
-    if (/^RobloxPlayerBeta\\.exe$/i.test(name)) {
+    if (/^RobloxPlayerBeta\.exe$/i.test(name)) {
       return { id: 'roblox-player', name: 'Roblox Player', processName: name };
     }
-    if (/^Minecraft(?:\\.Windows)?\\.exe$/i.test(name)) {
+    if (/^Minecraft(?:\.Windows)?\.exe$/i.test(name)) {
       return { id: 'minecraft', name: 'Minecraft', processName: name };
     }
-    if (/^javaw?\\.exe$/i.test(name)
-        && /net\\.minecraft|minecraft.*client|org\\.lwjgl/i.test(commandLine)) {
+    if (/^javaw?\.exe$/i.test(name)
+        && /net\.minecraft|minecraft.*client|org\.lwjgl/i.test(commandLine)) {
       return { id: 'minecraft-java', name: 'Minecraft (Java)', processName: name };
     }
   }
