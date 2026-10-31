@@ -281,11 +281,13 @@ async function activateClaudeMainWindow() {
       try {
         launchAttempted = await launchClaudeWithoutQuickEntry(scan.executablePath);
         if (launchAttempted) {
-          await delay(1600);
-          scan = await runPowerShell(ENUMERATE_WINDOWS_SCRIPT);
-          windows = Array.isArray(scan.windows) ? scan.windows : [];
-          quickEntryDetected = windows.some(isQuickEntryWindow);
-          mainWindow = selectMainClaudeWindow(windows);
+          for (let attempt = 0; attempt < 8 && !mainWindow; attempt += 1) {
+            await delay(500);
+            scan = await runPowerShell(ENUMERATE_WINDOWS_SCRIPT);
+            windows = Array.isArray(scan.windows) ? scan.windows : [];
+            quickEntryDetected = windows.some(isQuickEntryWindow);
+            mainWindow = selectMainClaudeWindow(windows);
+          }
         }
       } catch {
         launchAttempted = false;
