@@ -261,6 +261,19 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+async function getClaudeWindowSnapshot() {
+  const scan = await runPowerShell(ENUMERATE_WINDOWS_SCRIPT);
+  const windows = Array.isArray(scan.windows) ? scan.windows : [];
+
+  return {
+    processRunning: scan.processFound === true,
+    executablePath: scan.executablePath || null,
+    windows,
+    quickEntryDetected: windows.some(isQuickEntryWindow),
+    mainWindow: selectMainClaudeWindow(windows)
+  };
+}
+
 async function activateClaudeMainWindow() {
   if (process.platform !== 'win32') {
     return {
@@ -324,6 +337,7 @@ async function activateClaudeMainWindow() {
       quickEntryDetected,
       launchAttempted,
       foregroundConfirmed,
+      windowHandle: mainWindow.handle,
       window: {
         title: mainWindow.title,
         width: mainWindow.width,
@@ -346,6 +360,7 @@ async function activateClaudeMainWindow() {
 
 module.exports = {
   activateClaudeMainWindow,
+  getClaudeWindowSnapshot,
   isQuickEntryWindow,
   selectMainClaudeWindow
 };
