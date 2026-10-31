@@ -193,17 +193,49 @@ async function inspectClaudeLimit(now = new Date()) {
     );
 
     const ui = JSON.parse(stdout.trim());
-    const parsed = parseUsageLimitText(ui.text, now);
+    const accessibleText = String(ui.text || '').trim();
+    const parsed = parseUsageLimitText(accessibleText, now);
+
+    if (!accessibleText) {
+      return {
+        supported: true,
+        processRunning: true,
+        mainWindowFound: true,
+        quickEntryDetected: snapshot.quickEntryDetected,
+        blocked: null,
+        resetAt: null,
+        matchedText: null,
+        composerEnabled: ui.composerEnabled === true,
+        accessibleTextLength: 0,
+        window: {
+          title: snapshot.mainWindow.title,
+          width: snapshot.mainWindow.width,
+          height: snapshot.mainWindow.height
+        },
+        checkedAt: now.toISOString(),
+        status: 'accessibility_text_empty',
+        message: 'La ventana principal está abierta, pero Windows no expuso texto accesible. No se puede afirmar si hay límite o no.'
+      };
+    }
+
+    const composerEnabled = ui.composerEnabled === true;
+    const confidentlyClear = parsed.blocked === false && composerEnabled;
 
     return {
       supported: true,
       processRunning: true,
       mainWindowFound: true,
       quickEntryDetected: snapshot.quickEntryDetected,
-      blocked: parsed.blocked,
+      blocked: parsed.blocked === true ? true : confidentlyClear ? false : null,
       resetAt: parsed.resetAt,
       matchedText: parsed.matchedText,
-      composerEnabled: ui.composerEnabled === true,
+      composerEnabled,
+      accessibleTextLength: accessibleText.length,
+      status: parsed.blocked
+        ? 'limit_detected'
+        : confidentlyClear
+          ? 'no_limit'
+          : 'indeterminate',
       window: {
         title: snapshot.mainWindow.title,
         width: snapshot.mainWindow.width,
@@ -212,9 +244,9 @@ async function inspectClaudeLimit(now = new Date()) {
       checkedAt: now.toISOString(),
       message: parsed.blocked
         ? 'Claude muestra un aviso de límite de uso.'
-        : ui.composerEnabled
-          ? 'No se detectó el aviso de límite y el cuadro de mensaje está habilitado.'
-          : 'No se detectó el aviso de límite, pero no se confirmó un cuadro de mensaje disponible.'
+        : confidentlyClear
+          ? 'No se encontró un aviso de límite y el cuadro de mensaje está habilitado.'
+          : 'No se encontró un aviso de límite, pero tampoco se pudo confirmar un cuadro de mensaje habilitado. El resultado es indeterminado.'
     };
   } catch (error) {
     return {
