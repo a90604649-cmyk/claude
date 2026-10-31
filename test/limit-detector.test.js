@@ -20,6 +20,12 @@ test('detects the English usage-limit notice and its reset time', () => {
   assert.equal(result.resetAt, new Date(2026, 9, 30, 17, 40, 0).toISOString());
 });
 
+test('detects a five-hour usage limit variant', () => {
+  const result = parseUsageLimitText("You've reached your 5-hour limit. Resets at 6:15 PM");
+  assert.equal(result.blocked, true);
+  assert.ok(result.resetAt);
+});
+
 test('detects Spanish limit wording and a 24-hour reset time', () => {
   const now = new Date(2026, 9, 30, 12, 0, 0);
   const result = parseUsageLimitText(
