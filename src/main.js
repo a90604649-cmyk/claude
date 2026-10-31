@@ -7,6 +7,7 @@ const {
   dialog,
   ipcMain,
   Menu,
+  shell,
   nativeImage,
   Tray
 } = require('electron');
@@ -14,6 +15,10 @@ const {
 const { AppStore } = require('./services/store');
 const { MonitorScheduler } = require('./services/scheduler');
 const { activateClaudeMainWindow } = require('./services/claude-window');
+const { RecoveryController } = require('./services/recovery-controller');
+const { extractConversationId, buildConversationDeepLink } = require('./services/conversation');
+const { inspectClaudeLimit } = require('./services/limit-detector');
+const { sendContinuationMessage } = require('./services/claude-input');
 const {
   setWindowsStartup,
   getWindowsStartupStatus
@@ -27,6 +32,7 @@ let mainWindow = null;
 let tray = null;
 let store = null;
 let scheduler = null;
+let recoveryController = null;
 let isQuitting = false;
 
 const hasSingleInstance = app.requestSingleInstanceLock();
@@ -63,6 +69,15 @@ async function getDashboardSnapshot(extra = {}) {
     automaticContinueImplemented: false,
     ...extra
   };
+}
+
+async function openSavedConversation(conversationId) {
+  const validId = extractConversationId(conversationId);
+  if (!validId) throw new Error('La conversación guardada no tiene un ID válido.');
+
+  const deepLink = buildConversationDeepLink(validId);
+  await shell.openExternal(deepLink);
+  return { opened: true, deepLink };
 }
 
 async function activateClaudeMainFromUi(source = 'panel') {
@@ -254,6 +269,7 @@ function registerIpcHandlers() {
   ipcMain.handle('app:set-interval', async (_event, minutes) => {
     const value = await scheduler.setIntervalMinutes(minutes);
     await store.log('info', `Intervalo de comprobación ajustado a ${value.settings.checkIntervalMinutes} minutos.`);
+    recoveryController?.schedule();
     return getDashboardSnapshot();
   });
 
@@ -264,6 +280,80 @@ function registerIpcHandlers() {
 
   ipcMain.handle('app:activate-claude-main', async () => {
     return activateClaudeMainFromUi('panel');
+  });
+
+  ipcMain.handle('app:save-conversation', async (_event, rawValue) => {
+    const conversationId = extractConversationId(rawValue);
+    if (!conversationId) {
+      throw new Error('Pega un ID UUID o un enlace de chat de Claude con formato /chat/ID.');
+    }
+
+    await store.updateSettings({
+      conversationId,
+      conversationVerified: false,
+      automationEnabled: false
+    });
+    await store.updateMonitor({
+      taskPending: false,
+      recoveryStatus: 'needs_confirmation',
+      recoveryMessage: 'Abre esta conversación y confirma visualmente que es la tarea original.',
+      lastChatOpenedForVerificationAt: null,
+      limitDetectedAt: null,
+      limitResetAt: null,
+      nextEligibleAt: null,
+      continuationSentForLimit: false
+    });
+    await store.log('info', 'Se guardó un ID de conversación para verificarlo.');
+    recoveryController?.schedule();
+    return getDashboardSnapshot();
+  });
+
+  ipcMain.handle('app:open-saved-chat', async () => {
+    const conversationId = store.snapshot().settings.conversationId;
+    if (!conversationId) throw new Error('Primero guarda el ID de la conversación original.');
+
+    await openSavedConversation(conversationId);
+    await store.updateMonitor({
+      lastChatOpenedForVerificationAt: new Date().toISOString(),
+      recoveryStatus: 'awaiting_confirmation',
+      recoveryMessage: 'Claude abrió el chat guardado. Comprueba que sea la conversación de tu tarea original.'
+    });
+    await store.log('info', 'Se abrió la conversación guardada para verificación.');
+    return getDashboardSnapshot();
+  });
+
+  ipcMain.handle('app:set-conversation-verified', async (_event, verified) => {
+    const settings = store.snapshot().settings;
+    const openedAt = store.snapshot().monitor.lastChatOpenedForVerificationAt;
+
+    if (verified && (!settings.conversationId || !openedAt ||
+        Date.now() - Date.parse(openedAt) > 15 * 60 * 1000)) {
+      throw new Error('Primero abre el chat guardado y comprueba que sea el correcto.');
+    }
+
+    await store.updateSettings({
+      conversationVerified: Boolean(verified),
+      automationEnabled: verified ? settings.automationEnabled : false
+    });
+
+    if (!verified) {
+      await recoveryController?.configure(false);
+    }
+
+    await store.log('info', verified
+      ? 'El usuario confirmó que el chat guardado es la conversación original.'
+      : 'Se retiró la confirmación de la conversación.');
+    return getDashboardSnapshot();
+  });
+
+  ipcMain.handle('app:set-automation', async (_event, enabled) => {
+    await recoveryController.configure(Boolean(enabled));
+    return getDashboardSnapshot();
+  });
+
+  ipcMain.handle('app:recovery-check', async () => {
+    await recoveryController.tick('manual');
+    return getDashboardSnapshot();
   });
 }
 
@@ -280,10 +370,24 @@ if (hasSingleInstance) {
       onUpdate: sendMonitorUpdate
     });
 
+    recoveryController = new RecoveryController({
+      store,
+      inspectLimit: inspectClaudeLimit,
+      openConversation: openSavedConversation,
+      activateMainWindow: activateClaudeMainWindow,
+      sendMessage: sendContinuationMessage,
+      onUpdate: () => {
+        getDashboardSnapshot()
+          .then(sendMonitorUpdate)
+          .catch(() => {});
+      }
+    });
+
     registerIpcHandlers();
     createTray();
     await scheduler.start();
     createMainWindow({ hidden: startedAtLogin });
+    await recoveryController.start();
 
     app.on('activate', () => showMainWindow());
   }).catch((error) => {
@@ -295,6 +399,7 @@ if (hasSingleInstance) {
 app.on('before-quit', () => {
   isQuitting = true;
   scheduler?.dispose();
+  recoveryController?.dispose();
 });
 
 app.on('window-all-closed', () => {
