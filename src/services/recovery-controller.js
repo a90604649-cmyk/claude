@@ -106,6 +106,14 @@ class RecoveryController {
       clearTimeout(this.dueTimer);
       this.dueTimer = null;
     }
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+    if (this.startupTimer) {
+      clearTimeout(this.startupTimer);
+      this.startupTimer = null;
+    }
     if (!this.store.snapshot().settings.automationEnabled) return;
 
     const state = this.store.snapshot().monitor;
@@ -122,6 +130,7 @@ class RecoveryController {
       this.dueTimer = null;
       this.tick(source).catch(() => {});
     }, waitMs);
+    this.dueTimer.unref?.();
   }
 
   async onSystemResume() {
