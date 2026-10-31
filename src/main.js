@@ -45,12 +45,16 @@ const hasSingleInstance = app.requestSingleInstanceLock();
 if (!hasSingleInstance) {
   app.quit();
 } else {
-  app.on('second-instance', (_event, commandLine = []) => {
+  app.on('second-instance', async (_event, commandLine = []) => {
     if (Array.isArray(commandLine) && commandLine.includes('--scheduled-check')) {
       scheduledTaskArmed = false;
-      removeRecoveryTask().catch(() => {});
+      try {
+        await removeRecoveryTask();
+      } catch {
+        // The task may already have been consumed by Windows.
+      }
       if (recoveryController) {
-        recoveryController.tick('comprobación programada de Windows').catch(() => {});
+        await recoveryController.tick('comprobación programada de Windows');
       } else {
         scheduledCheckPending = true;
       }
