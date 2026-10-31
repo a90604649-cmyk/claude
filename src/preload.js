@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('autoContinue', {
   setConversationVerified: (verified) => ipcRenderer.invoke('app:set-conversation-verified', verified),
   setAutomation: (enabled) => ipcRenderer.invoke('app:set-automation', enabled),
   recoveryCheck: () => ipcRenderer.invoke('app:recovery-check'),
+  inspectLimitNow: () => ipcRenderer.invoke('app:inspect-limit-now'),
   checkNow: () => ipcRenderer.invoke('app:check-now'),
   activateClaudeMainWindow: () => ipcRenderer.invoke('app:activate-claude-main'),
   onUpdate: (callback) => {
