@@ -149,7 +149,7 @@ public static class AutoContinueWindowNative {
     [void][AutoContinueWindowNative]::GetWindowThreadProcessId($handle, [ref]$windowProcessId)
 
     if ($script:claudeProcessIds.Contains([int]$windowProcessId)) {
-      $rect = New-Object AutoContinueWindowNative+RECT
+      $rect = [AutoContinueWindowNative+RECT]::new()
       if ([AutoContinueWindowNative]::GetWindowRect($handle, [ref]$rect)) {
         $width = $rect.Right - $rect.Left
         $height = $rect.Bottom - $rect.Top
