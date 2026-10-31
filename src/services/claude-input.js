@@ -34,9 +34,20 @@ public static class AutoContinueInputNative {
         public IntPtr dwExtraInfo;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
     [StructLayout(LayoutKind.Explicit)]
     public struct INPUTUNION {
         [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public MOUSEINPUT mi;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -61,7 +72,8 @@ public static class AutoContinueInputNative {
             up.U.ki.dwFlags = 0x0004 | 0x0002;
 
             INPUT[] pair = new INPUT[] { down, up };
-            SendInput(2, pair, Marshal.SizeOf(typeof(INPUT)));
+            uint sent = SendInput(2, pair, Marshal.SizeOf(typeof(INPUT)));
+            if (sent != 2) throw new InvalidOperationException("No se pudieron introducir todos los caracteres.");
         }
     }
 
@@ -76,7 +88,8 @@ public static class AutoContinueInputNative {
         up.U.ki.dwFlags = 0x0002;
 
         INPUT[] pair = new INPUT[] { down, up };
-        SendInput(2, pair, Marshal.SizeOf(typeof(INPUT)));
+        uint sent = SendInput(2, pair, Marshal.SizeOf(typeof(INPUT)));
+        if (sent != 2) throw new InvalidOperationException("No se pudo enviar la tecla Enter.");
     }
 }
 '@
