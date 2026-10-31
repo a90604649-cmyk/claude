@@ -20,6 +20,12 @@ test('identifies the small Claude quick-entry window', () => {
     width: 430,
     height: 260
   }), true);
+
+  assert.equal(isQuickEntryWindow({
+    title: 'Que necesitas?',
+    width: 680,
+    height: 460
+  }), true);
 });
 
 test('does not select the quick-entry window as the chat destination', () => {
