@@ -111,6 +111,11 @@ class RecoveryController {
         return this.store.snapshot();
       }
 
+      if (inspection.processRunning === null) {
+        await this.setStatus('inspection_unavailable', inspection.message || 'No se pudo inspeccionar Claude. No se enviará nada.');
+        return this.store.snapshot();
+      }
+
       if (state.monitor.taskPending !== true) {
         if (inspection.blocked === null && inspection.processRunning !== false) {
           await this.setStatus('inspection_unavailable', inspection.message || 'No se pudo comprobar el estado de Claude.');
@@ -150,15 +155,6 @@ class RecoveryController {
       }
 
       state = this.store.snapshot();
-      now = Date.now();
-      const latestEligibleAt = state.monitor.nextEligibleAt
-        ? Date.parse(state.monitor.nextEligibleAt)
-        : 0;
-
-      if (latestEligibleAt && now < latestEligibleAt) {
-        await this.setStatus('waiting_limit', 'Claude todavía está dentro del tiempo de espera registrado.');
-        return this.store.snapshot();
-      }
 
       await this.setStatus('opening_original_chat', 'Abriendo la conversación original guardada.');
       await this.openConversation(conversationId);
