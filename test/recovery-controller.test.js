@@ -14,7 +14,7 @@ function createStore({ verified = true, taskPending = false, nextEligibleAt = nu
       conversationId: CHAT_ID,
       conversationVerified: verified,
       checkIntervalMinutes: 5,
-      fallbackWaitMinutes: 300,
+      fallbackWaitMinutes: 302,
       continuePrompt: 'Continúa esta tarea en el chat original.',
       schoolScheduleEnabled,
       schoolStartTime: '13:00',
@@ -249,4 +249,94 @@ test('does not inspect or open Claude while SKLauncher is running', async () => 
   assert.equal(opened, false);
   assert.equal(store.snapshot().monitor.recoveryStatus, 'blocked_by_game');
   assert.equal(store.snapshot().monitor.taskPending, true);
+});
+
+
+test('does not inspect Claude during the five-hour waiting period', async () => {
+  const due = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
+  const store = createStore({ taskPending: true, nextEligibleAt: due });
+  let inspected = false;
+  let gamesScanned = false;
+
+  const controller = new RecoveryController({
+    store,
+    inspectLimit: async () => {
+      inspected = true;
+      return { processRunning: false, blocked: null };
+    },
+    detectGame: async () => {
+      gamesScanned = true;
+      return null;
+    }
+  });
+
+  await controller.tick('test');
+
+  assert.equal(inspected, false);
+  assert.equal(gamesScanned, false);
+  assert.equal(store.snapshot().monitor.recoveryStatus, 'waiting_limit');
+  controller.dispose();
+});
+
+test('sets the first retry to five hours and two minutes after detection', async () => {
+  const fixedNow = new Date(2026, 9, 30, 20, 0, 0);
+  const store = createStore();
+  const controller = new RecoveryController({
+    store,
+    clock: () => fixedNow,
+    inspectLimit: async () => ({})
+  });
+
+  await controller.recordLimit({ resetAt: null });
+
+  const monitor = store.snapshot().monitor;
+  assert.equal(monitor.limitDetectedAt, fixedNow.toISOString());
+  assert.equal(monitor.nextEligibleAt, new Date(fixedNow.getTime() + 302 * 60 * 1000).toISOString());
+  assert.equal(monitor.taskPending, true);
+  controller.dispose();
+});
+
+test('closes Claude again when the scheduled check still finds a limit', async () => {
+  const due = new Date(Date.now() - 1000).toISOString();
+  const store = createStore({ taskPending: true, nextEligibleAt: due });
+  let inspections = 0;
+  let closed = 0;
+  let sent = false;
+
+  const controller = new RecoveryController({
+    store,
+    delay: async () => {},
+    inspectLimit: async () => {
+      inspections += 1;
+      if (inspections === 1) {
+        return { processRunning: false, mainWindowFound: false, blocked: null };
+      }
+      return {
+        processRunning: true,
+        mainWindowFound: true,
+        blocked: true,
+        composerEnabled: false,
+        resetAt: null
+      };
+    },
+    openConversation: async () => ({ opened: true }),
+    closeMainWindow: async () => {
+      closed += 1;
+      return { closed: true };
+    },
+    activateMainWindow: async () => ({ status: 'focused', windowHandle: '123' }),
+    sendMessage: async () => {
+      sent = true;
+      return { sent: true };
+    }
+  });
+
+  await controller.tick('test');
+
+  assert.equal(closed, 1);
+  assert.equal(sent, false);
+  assert.equal(store.snapshot().monitor.taskPending, true);
+  assert.equal(store.snapshot().monitor.recoveryStatus, 'waiting_limit');
+  assert.ok(Date.parse(store.snapshot().monitor.nextEligibleAt) > Date.now());
+  controller.dispose();
 });
