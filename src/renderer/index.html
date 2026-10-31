@@ -14,7 +14,7 @@
         <div class="brand-mark"><span></span></div>
         <div>
           <div class="brand-name">Claude AutoContinue</div>
-          <div class="brand-subtitle">Beta 1 · Panel de control</div>
+          <div class="brand-subtitle">Beta 2 · Panel de control</div>
         </div>
       </div>
       <div class="topbar-right">
@@ -50,6 +50,22 @@
         <div class="card-footer">
           <span class="small-note" id="last-check">Última revisión: todavía no hay datos</span>
           <button class="button button-primary" id="check-now">Comprobar ahora</button>
+        </div>
+      </article>
+
+      <article class="card main-window-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">DESTINO DE CONTINUACIÓN</p>
+            <h2>Chat principal de Claude</h2>
+          </div>
+          <span class="state-icon" id="main-window-icon">↗</span>
+        </div>
+        <div class="large-status" id="main-window-status">Sin comprobar</div>
+        <p class="muted" id="main-window-detail">AutoContinue buscará la ventana grande del chat e ignorará la ventana pequeña «¿Qué necesitas?».</p>
+        <div class="card-footer">
+          <span class="small-note" id="main-window-check">Todavía no se ha activado</span>
+          <button class="button button-primary" id="activate-main-window">Abrir chat principal</button>
         </div>
       </article>
 
@@ -106,11 +122,11 @@
         <div class="card-heading">
           <div>
             <p class="eyebrow">SIGUIENTE ETAPA</p>
-            <h2>Detección del límite</h2>
+            <h2>Continuación de tareas</h2>
           </div>
           <span class="planned-tag">Pendiente</span>
         </div>
-        <p class="muted">La Beta 1 todavía no interpreta el aviso de límite de Claude. Esta función se añadirá en una etapa posterior.</p>
+        <p class="muted">La Beta 2 prepara y activa la ventana correcta del chat. La detección del límite y el envío de «Continuar» se añadirán en la siguiente etapa.</p>
         <div class="feature-line"><span class="feature-dot"></span> No intenta enviar mensajes de prueba</div>
         <div class="feature-line"><span class="feature-dot"></span> No intenta evitar ni saltarse límites</div>
       </article>
@@ -134,7 +150,7 @@
         <div class="notice-mark">i</div>
         <div>
           <strong>Qué incluye esta beta</strong>
-          <p>Esta versión guarda tus ajustes, puede iniciar con Windows, permanece en la bandeja y revisa si Claude Desktop está abierto. La detección visual del límite y la continuación de tareas aún no están implementadas.</p>
+          <p>Además de la vigilancia y el inicio con Windows, esta versión puede localizar y activar la ventana principal de Claude. Si solo encuentra la ventana pequeña, no escribirá en ella. Todavía no envía mensajes ni reanuda tareas automáticamente.</p>
         </div>
       </aside>
     </section>
