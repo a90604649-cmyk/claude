@@ -1,6 +1,6 @@
 {
   "name": "claude-autocontinue",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "main": "src/main.js",
   "engines": {
