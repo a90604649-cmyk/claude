@@ -80,7 +80,7 @@ function identifyBlockingGame(processes = []) {
       return { id: 'minecraft', name: 'Minecraft', processName: name };
     }
     if (/^javaw?\.exe$/i.test(name)
-        && /net\.minecraft|minecraft.*client|org\.lwjgl/i.test(commandLine)) {
+        && /net\.minecraft|minecraft.*client|org\.lwjgl|--gameDir|--assetsDir/i.test(commandLine)) {
       return { id: 'minecraft-java', name: 'Minecraft (Java)', processName: name };
     }
   }
@@ -97,7 +97,7 @@ $processes = @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop | Wher
   ($name -match '^(?i)sk[\s_-]*launcher\.exe$') -or
   ($name -match '^(?i)RobloxPlayerBeta\.exe$') -or
   ($name -match '^(?i)Minecraft(\.Windows)?\.exe$') -or
-  (($name -match '^(?i)javaw?\.exe$') -and ($line -match '(?i)net\.minecraft|minecraft.*client|org\.lwjgl'))
+  (($name -match '^(?i)javaw?\.exe$') -and ($line -match '(?i)net\.minecraft|minecraft.*client|org\.lwjgl|--gameDir|--assetsDir'))
 } | Select-Object -First 12 Name, CommandLine)
 
 $response = @($processes | ForEach-Object {
