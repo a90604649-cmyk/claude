@@ -202,7 +202,7 @@ function renderSnapshot(snapshot) {
     needs_conversation: 'Falta guardar el chat',
     waiting_limit: 'Esperando que se restablezca',
     blocked_schedule: 'Pausado por horario de clases',
-    blocked_by_game: 'Pausado por un juego abierto',
+    blocked_by_game: 'Esperando que cierres el juego',
     opening_claude: 'Abriendo Claude',
     opening_original_chat: 'Abriendo chat original',
     inspection_unavailable: 'No se pudo comprobar',
