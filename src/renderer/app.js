@@ -192,7 +192,7 @@ function renderSnapshot(snapshot) {
     inspection_unavailable: 'No se pudo comprobar',
     chat_not_ready: 'Chat todavía no preparado',
     sending: 'Enviando continuación',
-    continued: 'Tarea reanudada',
+    continued: 'Continuación enviada',
     manual_review: 'Revisión manual necesaria',
     error: 'Error de recuperación'
   };
