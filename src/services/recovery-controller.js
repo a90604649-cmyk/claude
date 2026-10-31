@@ -20,6 +20,7 @@ class RecoveryController {
     closeMainWindow = async () => ({ closed: false }),
     scheduleWake = async () => ({ scheduled: false }),
     cancelWake = async () => ({ removed: false }),
+    waitForGamesToClose = async () => ({ started: false }),
     onIdleWait = null,
     onUpdate,
     delay = wait,
@@ -34,6 +35,7 @@ class RecoveryController {
     this.closeMainWindow = closeMainWindow;
     this.scheduleWake = scheduleWake;
     this.cancelWake = cancelWake;
+    this.waitForGamesToClose = waitForGamesToClose;
     this.onIdleWait = onIdleWait;
     this.onUpdate = onUpdate;
     this.delay = delay;
@@ -295,15 +297,28 @@ class RecoveryController {
         if (state.settings.gameProtectionEnabled !== false) {
           const game = await this.detectGame();
           if (game) {
-            const message = `No se ejecutó: ${game.name} está abierto. Se volverá a comprobar en 5 minutos.`;
+            const message = `Claude ya está disponible, pero ${game.name} sigue abierto. AutoContinue esperará el cierre de ese juego y continuará inmediatamente después.`;
             await this.applyExecutionBlock({
               status: 'blocked_by_game',
               reason: 'game_active',
               processName: game.processName,
               message
             });
-            await this.deferPending('blocked_by_game', message, new Date(now.getTime() + GAME_RETRY_MS), {
-              reason: 'game_active',
+
+            const watcher = await this.waitForGamesToClose();
+            if (watcher?.started === true) {
+              await this.store.log('info', 'Windows está esperando el evento de cierre de SKLauncher, Minecraft o Roblox Player. No habrá revisiones periódicas.', {
+                game: game.name,
+                processName: game.processName
+              });
+              this.emitUpdate();
+              if (this.onIdleWait) await this.onIdleWait({ reason: 'waiting_for_game_exit', game: game.name });
+              return this.store.snapshot();
+            }
+
+            const fallbackMessage = 'No se pudo iniciar la vigilancia por evento de cierre del juego. Se intentará otra vez dentro de 1 minuto.';
+            await this.deferPending('blocked_by_game', fallbackMessage, new Date(now.getTime() + 60_000), {
+              reason: 'game_watcher_unavailable',
               processName: game.processName
             });
             return this.store.snapshot();
@@ -362,14 +377,31 @@ class RecoveryController {
         return this.store.snapshot();
       }
 
-      // Re-check protected applications immediately before taking focus.
+      // Check again immediately before focusing Claude. If a game launched during
+      // Claude's availability check, wait for its process-stop event, not a timer.
       if (state.settings.gameProtectionEnabled !== false) {
         const game = await this.detectGame();
         if (game) {
           if (openedByController) await this.closeMainWindow().catch(() => {});
-          const message = `No se ejecutó: ${game.name} está abierto. Se volverá a comprobar en 5 minutos.`;
-          await this.deferPending('blocked_by_game', message, new Date(this.clock().getTime() + GAME_RETRY_MS), {
+          const message = `No se ejecutó: ${game.name} está abierto. AutoContinue esperará su cierre.`;
+          await this.applyExecutionBlock({
+            status: 'blocked_by_game',
             reason: 'game_active',
+            processName: game.processName,
+            message
+          });
+          const watcher = await this.waitForGamesToClose();
+          if (watcher?.started === true) {
+            await this.store.log('info', 'Windows está esperando el cierre del juego para continuar inmediatamente.', {
+              game: game.name,
+              processName: game.processName
+            });
+            this.emitUpdate();
+            if (this.onIdleWait) await this.onIdleWait({ reason: 'waiting_for_game_exit', game: game.name });
+            return this.store.snapshot();
+          }
+          await this.deferPending('blocked_by_game', 'No se pudo iniciar la vigilancia del juego. Se intentará otra vez dentro de 1 minuto.', new Date(this.clock().getTime() + 60_000), {
+            reason: 'game_watcher_unavailable',
             processName: game.processName
           });
           return this.store.snapshot();
