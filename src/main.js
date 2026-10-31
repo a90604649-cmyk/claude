@@ -22,6 +22,7 @@ const { inspectClaudeLimit } = require('./services/limit-detector');
 const { sendContinuationMessage } = require('./services/claude-input');
 const { sanitizeExecutionPolicySettings } = require('./services/execution-policy');
 const { removeRecoveryTask, scheduleRecoveryTask } = require('./services/windows-scheduler');
+const { startGameExitWatcher } = require('./services/windows-game-watcher');
 const {
   setWindowsStartup,
   getWindowsStartupStatus
@@ -498,11 +499,11 @@ if (hasSingleInstance) {
         scheduledTaskArmed = false;
         return result;
       },
+      waitForGamesToClose: () => startGameExitWatcher(app),
       onIdleWait: async () => {
-        if (startedAtLogin || startedByScheduledCheck || !mainWindow || !mainWindow.isVisible()) {
-          isQuitting = true;
-          app.quit();
-        }
+        // Windows Task Scheduler or the detached process watcher now owns the next wake-up.
+        isQuitting = true;
+        app.quit();
       },
       onUpdate: () => {
         getDashboardSnapshot()
