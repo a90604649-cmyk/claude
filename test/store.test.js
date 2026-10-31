@@ -27,7 +27,8 @@ test('loads safe defaults and saves settings across restarts', async (t) => {
 
   await store.updateSettings({
     monitoringEnabled: false,
-    checkIntervalMinutes: 10
+    checkIntervalMinutes: 10,
+    continuePrompt: 'Continúa con la tarea que quedó pendiente en esta misma conversación. Revisa el contexto anterior, conserva los avances y sigue desde el último punto completado. No comiences un chat nuevo.'
   });
 
   const restartedStore = new AppStore(directory);
@@ -36,6 +37,7 @@ test('loads safe defaults and saves settings across restarts', async (t) => {
   assert.equal(restored.settings.monitoringEnabled, false);
   assert.equal(restored.settings.checkIntervalMinutes, 10);
   assert.equal(restored.settings.startWithWindows, false);
+  assert.equal(restored.settings.continuePrompt, 'Continúa.');
 });
 
 test('writes and reads recent event records', async (t) => {
@@ -57,4 +59,15 @@ test('returns isolated snapshots so callers cannot mutate stored settings', asyn
   snapshot.settings.monitoringEnabled = false;
 
   assert.equal(store.snapshot().settings.monitoringEnabled, true);
+});
+
+
+test('keeps a custom continuation message instead of overwriting it during migration', async (t) => {
+  const { store, directory } = await createTemporaryStore(t);
+  await store.updateSettings({ continuePrompt: 'Sigue desde el último paso.' });
+
+  const restartedStore = new AppStore(directory);
+  const restored = await restartedStore.load();
+
+  assert.equal(restored.settings.continuePrompt, 'Sigue desde el último paso.');
 });
