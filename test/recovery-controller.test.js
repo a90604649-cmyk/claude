@@ -340,3 +340,30 @@ test('closes Claude again when the scheduled check still finds a limit', async (
   assert.ok(Date.parse(store.snapshot().monitor.nextEligibleAt) > Date.now());
   controller.dispose();
 });
+
+
+test('hands long waits to Windows Task Scheduler and requests app exit', async () => {
+  const fixedNow = new Date(2026, 9, 30, 20, 0, 0);
+  const store = createStore();
+  let scheduledAt = null;
+  let requestedExit = false;
+
+  const controller = new RecoveryController({
+    store,
+    clock: () => fixedNow,
+    scheduleWake: async (dueAt) => {
+      scheduledAt = dueAt;
+      return { scheduled: true, taskName: 'ClaudeAutoContinue-Recovery' };
+    },
+    onIdleWait: async () => {
+      requestedExit = true;
+    }
+  });
+
+  await controller.recordLimit({ resetAt: null });
+
+  assert.equal(scheduledAt.toISOString(), new Date(fixedNow.getTime() + 302 * 60 * 1000).toISOString());
+  assert.equal(requestedExit, true);
+  assert.equal(store.snapshot().monitor.taskPending, true);
+  controller.dispose();
+});
