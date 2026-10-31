@@ -52,6 +52,19 @@ function showMainWindow() {
   mainWindow.focus();
 }
 
+async function getDashboardSnapshot(extra = {}) {
+  return {
+    ...store.snapshot(),
+    logs: await store.readRecentLogs(25),
+    appVersion: app.getVersion(),
+    startup: getWindowsStartupStatus(app),
+    platform: process.platform,
+    limitDetectionImplemented: false,
+    automaticContinueImplemented: false,
+    ...extra
+  };
+}
+
 async function activateClaudeMainFromUi(source = 'panel') {
   const result = await activateClaudeMainWindow();
   const checkedAt = new Date().toISOString();
@@ -75,11 +88,9 @@ async function activateClaudeMainFromUi(source = 'panel') {
     window: result.window || null
   });
 
-  const payload = {
-    ...store.snapshot(),
-    mainWindowResult: result,
-    logs: await store.readRecentLogs(25)
-  };
+  const payload = await getDashboardSnapshot({
+    mainWindowResult: result
+  });
 
   sendMonitorUpdate(payload);
   return payload;
@@ -218,15 +229,7 @@ async function askAboutWindowsStartup() {
 
 function registerIpcHandlers() {
   ipcMain.handle('app:get-snapshot', async () => {
-    return {
-      ...store.snapshot(),
-      logs: await store.readRecentLogs(25),
-      appVersion: app.getVersion(),
-      startup: getWindowsStartupStatus(app),
-      platform: process.platform,
-      limitDetectionImplemented: false,
-      automaticContinueImplemented: false
-    };
+    return getDashboardSnapshot();
   });
 
   ipcMain.handle('app:set-startup', async (_event, enabled) => {
@@ -236,10 +239,7 @@ function registerIpcHandlers() {
       ? 'Inicio automático con Windows activado.'
       : 'Inicio automático con Windows desactivado.');
 
-    return {
-      ...store.snapshot(),
-      startup: result
-    };
+    return getDashboardSnapshot({ startup: result });
   });
 
   ipcMain.handle('app:set-monitoring', async (_event, enabled) => {
@@ -248,24 +248,18 @@ function registerIpcHandlers() {
       ? 'Vigilancia de Claude activada.'
       : 'Vigilancia de Claude pausada.');
 
-    return {
-      ...store.snapshot(),
-      logs: await store.readRecentLogs(25)
-    };
+    return getDashboardSnapshot();
   });
 
   ipcMain.handle('app:set-interval', async (_event, minutes) => {
     const value = await scheduler.setIntervalMinutes(minutes);
     await store.log('info', `Intervalo de comprobación ajustado a ${value.settings.checkIntervalMinutes} minutos.`);
-    return value;
+    return getDashboardSnapshot();
   });
 
   ipcMain.handle('app:check-now', async () => {
     const result = await scheduler.checkNow('manual');
-    return {
-      ...result,
-      logs: await store.readRecentLogs(25)
-    };
+    return getDashboardSnapshot({ processCheck: result.processCheck });
   });
 
   ipcMain.handle('app:activate-claude-main', async () => {
