@@ -24,6 +24,10 @@ const elements = {
   fallbackWait: $('fallback-wait'),
   recoveryInterval: $('recovery-interval'),
   recoveryCheck: $('recovery-check'),
+  limitCheckStatus: $('limit-check-status'),
+  limitCheckDetail: $('limit-check-detail'),
+  limitCheckError: $('limit-check-error'),
+  limitCheckTime: $('limit-check-time'),
   lastCheck: $('last-check'),
   checkNow: $('check-now'),
   monitoringToggle: $('monitoring-toggle'),
@@ -202,6 +206,20 @@ function renderSnapshot(snapshot) {
   elements.recoveryDetail.textContent = monitor.recoveryMessage ||
     'Activa AutoContinue después de verificar la conversación original.';
 
+  const limitLabels = {
+    detected: 'LÍMITE DETECTADO',
+    clear: 'SIN LÍMITE · LISTO PARA ESCRIBIR',
+    claude_closed: 'CLAUDE ESTÁ CERRADO',
+    unknown: 'NO SE PUDO CONFIRMAR'
+  };
+  elements.limitCheckStatus.textContent = limitLabels[monitor.limitStatus] || 'Sin comprobar';
+  elements.limitCheckDetail.textContent = monitor.limitCheckMessage ||
+    'Pulsa «Comprobar estado ahora» para revisar Claude.';
+  elements.limitCheckError.textContent = monitor.limitCheckError
+    ? `Detalle técnico: ${monitor.limitCheckError}`
+    : '';
+  elements.limitCheckTime.textContent = `Última comprobación: ${formatDate(monitor.lastLimitCheckAt)}`;
+
   elements.lastCheck.textContent = `Última revisión: ${formatDate(monitor.lastCheckAt)}`;
   renderLogs(snapshot.logs || []);
 }
@@ -314,13 +332,20 @@ elements.fallbackWait.addEventListener('change', async () => {
 
 elements.recoveryCheck.addEventListener('click', async () => {
   elements.recoveryCheck.disabled = true;
-  elements.recoveryCheck.textContent = 'Comprobando...';
+  elements.recoveryCheck.textContent = 'Inspeccionando Claude...';
+  elements.limitCheckStatus.textContent = 'COMPROBANDO AHORA';
+  elements.limitCheckDetail.textContent = 'Leyendo el estado de la ventana principal de Claude. No se enviará ningún mensaje.';
+  elements.limitCheckError.textContent = '';
+
   try {
-    const snapshot = await window.autoContinue.recoveryCheck();
+    const snapshot = await window.autoContinue.inspectLimitNow();
     renderSnapshot(snapshot);
-    showToast(snapshot.monitor?.recoveryMessage || 'Comprobación terminada.');
+    showToast(snapshot.monitor?.limitCheckMessage || 'Comprobación completada.');
   } catch (error) {
-    showToast(error.message || 'No se pudo comprobar la recuperación.');
+    elements.limitCheckStatus.textContent = 'ERROR DE COMPROBACIÓN';
+    elements.limitCheckDetail.textContent = 'No se pudo consultar el estado de Claude.';
+    elements.limitCheckError.textContent = error.message || String(error);
+    showToast('No se pudo comprobar el límite.');
   } finally {
     elements.recoveryCheck.disabled = false;
     elements.recoveryCheck.textContent = 'Comprobar estado ahora';
