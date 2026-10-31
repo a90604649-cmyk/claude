@@ -374,6 +374,44 @@ function registerIpcHandlers() {
     return getDashboardSnapshot();
   });
 
+  ipcMain.handle('app:inspect-limit-now', async () => {
+    const result = await inspectClaudeLimit();
+    const checkedAt = result.checkedAt || new Date().toISOString();
+    const status = result.blocked === true
+      ? 'detected'
+      : result.blocked === false
+        ? 'clear'
+        : result.processRunning === false
+          ? 'claude_closed'
+          : 'unknown';
+
+    await store.updateMonitor({
+      limitStatus: status,
+      lastLimitCheckAt: checkedAt,
+      limitCheckMessage: result.message || 'No hay detalles de la comprobación.',
+      limitCheckError: result.error || null,
+      limitCheckConfidence: result.blocked === false && result.composerEnabled === true
+        ? 'confirmed'
+        : result.blocked === true
+          ? 'limit_detected'
+          : 'indeterminate'
+    });
+
+    const level = result.blocked === true ? 'warning' : status === 'unknown' ? 'error' : 'info';
+    await store.log(level, result.message || 'Comprobación manual de límite completada.', {
+      status,
+      processRunning: result.processRunning,
+      mainWindowFound: result.mainWindowFound,
+      composerEnabled: result.composerEnabled,
+      accessibleTextLength: result.accessibleTextLength || 0,
+      error: result.error || null
+    });
+
+    const snapshot = await getDashboardSnapshot({ limitInspection: result });
+    sendMonitorUpdate(snapshot);
+    return snapshot;
+  });
+
   ipcMain.handle('app:recovery-check', async () => {
     await recoveryController.tick('manual');
     return getDashboardSnapshot();
