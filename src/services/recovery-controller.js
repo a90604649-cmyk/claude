@@ -7,7 +7,6 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-const GAME_RETRY_MS = 5 * 60 * 1000;
 const BLOCKED_RETRY_MS = 2 * 60 * 1000;
 
 class RecoveryController {
