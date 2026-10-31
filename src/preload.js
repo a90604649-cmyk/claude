@@ -7,6 +7,12 @@ contextBridge.exposeInMainWorld('autoContinue', {
   setStartup: (enabled) => ipcRenderer.invoke('app:set-startup', enabled),
   setMonitoring: (enabled) => ipcRenderer.invoke('app:set-monitoring', enabled),
   setIntervalMinutes: (minutes) => ipcRenderer.invoke('app:set-interval', minutes),
+  setFallbackWait: (minutes) => ipcRenderer.invoke('app:set-fallback-wait', minutes),
+  saveConversation: (value) => ipcRenderer.invoke('app:save-conversation', value),
+  openSavedChat: () => ipcRenderer.invoke('app:open-saved-chat'),
+  setConversationVerified: (verified) => ipcRenderer.invoke('app:set-conversation-verified', verified),
+  setAutomation: (enabled) => ipcRenderer.invoke('app:set-automation', enabled),
+  recoveryCheck: () => ipcRenderer.invoke('app:recovery-check'),
   checkNow: () => ipcRenderer.invoke('app:check-now'),
   activateClaudeMainWindow: () => ipcRenderer.invoke('app:activate-claude-main'),
   onUpdate: (callback) => {
