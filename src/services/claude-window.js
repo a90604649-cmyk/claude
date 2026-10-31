@@ -1,6 +1,6 @@
 'use strict';
 
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 
 const execFileAsync = promisify(execFile);
@@ -92,6 +92,7 @@ foreach ($process in $processes) {
 if ($processIds.Count -eq 0) {
   $response = [ordered]@{
     processFound = $false
+    executablePath = $null
     windows = @()
   }
 } else {
@@ -180,8 +181,13 @@ public static class AutoContinueWindowNative {
 
   [void][AutoContinueWindowNative]::EnumWindows($callback, [IntPtr]::Zero)
 
+  $executablePath = ($processes | Where-Object {
+    -not [string]::IsNullOrWhiteSpace($_.Path)
+  } | Select-Object -First 1).Path
+
   $response = [ordered]@{
     processFound = $true
+    executablePath = $executablePath
     windows = @($script:claudeWindows.ToArray())
   }
 }
@@ -231,6 +237,30 @@ ConvertTo-Json -InputObject $response -Compress
 `;
 }
 
+function launchClaudeWithoutQuickEntry(executablePath) {
+  if (!executablePath || typeof executablePath !== 'string') {
+    return Promise.resolve(false);
+  }
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(executablePath, [], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: false
+    });
+
+    child.once('error', reject);
+    child.once('spawn', () => {
+      child.unref();
+      resolve(true);
+    });
+  });
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 async function activateClaudeMainWindow() {
   if (process.platform !== 'win32') {
     return {
@@ -241,9 +271,26 @@ async function activateClaudeMainWindow() {
   }
 
   try {
-    const scan = await runPowerShell(ENUMERATE_WINDOWS_SCRIPT);
-    const windows = Array.isArray(scan.windows) ? scan.windows : [];
-    const quickEntryDetected = windows.some(isQuickEntryWindow);
+    let scan = await runPowerShell(ENUMERATE_WINDOWS_SCRIPT);
+    let windows = Array.isArray(scan.windows) ? scan.windows : [];
+    let quickEntryDetected = windows.some(isQuickEntryWindow);
+    let mainWindow = selectMainClaudeWindow(windows);
+    let launchAttempted = false;
+
+    if (scan.processFound && !mainWindow && scan.executablePath) {
+      try {
+        launchAttempted = await launchClaudeWithoutQuickEntry(scan.executablePath);
+        if (launchAttempted) {
+          await delay(1600);
+          scan = await runPowerShell(ENUMERATE_WINDOWS_SCRIPT);
+          windows = Array.isArray(scan.windows) ? scan.windows : [];
+          quickEntryDetected = windows.some(isQuickEntryWindow);
+          mainWindow = selectMainClaudeWindow(windows);
+        }
+      } catch {
+        launchAttempted = false;
+      }
+    }
 
     if (!scan.processFound) {
       return {
@@ -254,14 +301,14 @@ async function activateClaudeMainWindow() {
       };
     }
 
-    const mainWindow = selectMainClaudeWindow(windows);
     if (!mainWindow) {
       return {
         supported: true,
         status: 'main_window_not_found',
         quickEntryDetected,
+        launchAttempted,
         message: quickEntryDetected
-          ? 'Se detectó la ventana pequeña de Claude, pero no una ventana de chat principal. No se escribirá en la ventana pequeña.'
+          ? 'Se detectó la ventana pequeña. Se intentó abrir Claude normalmente, pero no apareció el chat principal. No se escribirá en la ventana pequeña.'
           : 'Claude está ejecutándose, pero no se encontró una ventana principal de chat visible.'
       };
     }
@@ -273,6 +320,7 @@ async function activateClaudeMainWindow() {
       supported: true,
       status: foregroundConfirmed ? 'focused' : 'focus_failed',
       quickEntryDetected,
+      launchAttempted,
       foregroundConfirmed,
       window: {
         title: mainWindow.title,
