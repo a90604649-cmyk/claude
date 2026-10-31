@@ -14,7 +14,7 @@
         <div class="brand-mark"><span></span></div>
         <div>
           <div class="brand-name">Claude AutoContinue</div>
-          <div class="brand-subtitle">Beta 2 · Panel de control</div>
+          <div class="brand-subtitle">Beta 3 · Panel de control</div>
         </div>
       </div>
       <div class="topbar-right">
@@ -122,13 +122,68 @@
         <div class="card-heading">
           <div>
             <p class="eyebrow">SIGUIENTE ETAPA</p>
-            <h2>Continuación de tareas</h2>
+            <h2>Estado de recuperación</h2>
           </div>
           <span class="planned-tag">Pendiente</span>
         </div>
-        <p class="muted">La Beta 2 prepara y activa la ventana correcta del chat. La detección del límite y el envío de «Continuar» se añadirán en la siguiente etapa.</p>
+        <p class="muted">B3 guarda el chat original, detecta el aviso de límite mediante la accesibilidad de Windows y comprueba si Claude permite volver a escribir antes de enviar una continuación.</p>
         <div class="feature-line"><span class="feature-dot"></span> No intenta enviar mensajes de prueba</div>
         <div class="feature-line"><span class="feature-dot"></span> No intenta evitar ni saltarse límites</div>
+      </article>
+    </section>
+
+    <section class="automation-grid">
+      <article class="card chat-target-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">CONVERSACIÓN PROTEGIDA</p>
+            <h2>Guardar el chat original</h2>
+          </div>
+          <span class="mini-symbol">⌁</span>
+        </div>
+        <p class="muted">Guarda el UUID o enlace del chat donde iniciaste la tarea. AutoContinue volverá siempre a este chat, aunque abras conversaciones más recientes.</p>
+        <label class="field-label" for="conversation-id">ID o enlace del chat</label>
+        <input class="text-input" id="conversation-id" type="text" spellcheck="false" autocomplete="off" placeholder="https://claude.ai/chat/UUID">
+        <div class="action-row">
+          <button class="button button-secondary" id="save-conversation">Guardar chat</button>
+          <button class="button button-primary" id="open-saved-chat">Abrir y verificar</button>
+        </div>
+        <label class="confirm-row" for="confirm-conversation">
+          <input type="checkbox" id="confirm-conversation" disabled>
+          <span>Confirmo que esta es la conversación original de mi tarea.</span>
+        </label>
+        <p class="hint" id="conversation-status">Todavía no hay una conversación guardada.</p>
+      </article>
+
+      <article class="card recovery-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">RECUPERACIÓN AUTOMÁTICA</p>
+            <h2>Esperar y continuar</h2>
+          </div>
+          <span class="mini-symbol">↻</span>
+        </div>
+        <div class="large-status recovery-status" id="recovery-status">Desactivado</div>
+        <p class="muted" id="recovery-detail">Primero guarda y confirma la conversación original. La automatización solo se activa después de detectar un límite.</p>
+        <label class="switch-row" for="automation-toggle">
+          <span>
+            <strong>Activar AutoContinue</strong>
+            <small>Reabrir el chat original y continuar cuando Claude vuelva a permitir mensajes</small>
+          </span>
+          <input class="switch" type="checkbox" id="automation-toggle" disabled>
+        </label>
+        <div class="setting-line">
+          <label for="fallback-wait">Espera de respaldo si Claude no muestra una hora</label>
+          <select id="fallback-wait">
+            <option value="300">5 horas</option>
+            <option value="360">6 horas</option>
+            <option value="480">8 horas</option>
+          </select>
+        </div>
+        <div class="action-row">
+          <button class="button button-secondary" id="recovery-check">Comprobar estado ahora</button>
+        </div>
+        <p class="hint">No envía mensajes de prueba ni intenta evitar límites. Si no puede confirmar el chat, el límite o el cuadro de mensaje, se detiene.</p>
       </article>
     </section>
 
@@ -150,7 +205,7 @@
         <div class="notice-mark">i</div>
         <div>
           <strong>Qué incluye esta beta</strong>
-          <p>Además de la vigilancia y el inicio con Windows, esta versión puede localizar y activar la ventana principal de Claude. Si solo encuentra la ventana pequeña, no escribirá en ella. Todavía no envía mensajes ni reanuda tareas automáticamente.</p>
+          <p>B3 protege una conversación verificada y puede reabrirla mediante el enlace oficial de Claude. Solo intenta continuar después de detectar un límite y confirmar que el aviso desapareció y que el cuadro de mensaje está habilitado.</p>
         </div>
       </aside>
     </section>
