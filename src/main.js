@@ -38,12 +38,24 @@ let store = null;
 let scheduler = null;
 let recoveryController = null;
 let isQuitting = false;
+let scheduledTaskArmed = false;
+let scheduledCheckPending = false;
 
 const hasSingleInstance = app.requestSingleInstanceLock();
 if (!hasSingleInstance) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, commandLine = []) => {
+    if (Array.isArray(commandLine) && commandLine.includes('--scheduled-check')) {
+      scheduledTaskArmed = false;
+      removeRecoveryTask().catch(() => {});
+      if (recoveryController) {
+        recoveryController.tick('comprobación programada de Windows').catch(() => {});
+      } else {
+        scheduledCheckPending = true;
+      }
+      return;
+    }
     showMainWindow();
   });
 }
@@ -137,6 +149,11 @@ function createMainWindow({ hidden = false } = {}) {
 
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
+      if (scheduledTaskArmed && store?.snapshot().monitor.taskPending) {
+        isQuitting = true;
+        app.quit();
+        return;
+      }
       event.preventDefault();
       mainWindow.hide();
     }
@@ -459,11 +476,21 @@ if (hasSingleInstance) {
       activateMainWindow: activateClaudeMainWindow,
       closeMainWindow: closeClaudeMainWindow,
       sendMessage: sendContinuationMessage,
-      scheduleWake: (dueAt) => scheduleRecoveryTask(app, dueAt),
-      cancelWake: removeRecoveryTask,
+      scheduleWake: async (dueAt) => {
+        const result = await scheduleRecoveryTask(app, dueAt);
+        scheduledTaskArmed = result.scheduled === true;
+        return result;
+      },
+      cancelWake: async () => {
+        const result = await removeRecoveryTask();
+        scheduledTaskArmed = false;
+        return result;
+      },
       onIdleWait: async () => {
-        isQuitting = true;
-        app.quit();
+        if (startedAtLogin || startedByScheduledCheck || !mainWindow || !mainWindow.isVisible()) {
+          isQuitting = true;
+          app.quit();
+        }
       },
       onUpdate: () => {
         getDashboardSnapshot()
@@ -482,6 +509,10 @@ if (hasSingleInstance) {
     await scheduler.start();
     createMainWindow({ hidden: startedAtLogin || startedByScheduledCheck });
     await recoveryController.start({ scheduledCheck: startedByScheduledCheck });
+    if (scheduledCheckPending) {
+      scheduledCheckPending = false;
+      recoveryController.tick('comprobación programada de Windows').catch(() => {});
+    }
 
     app.on('activate', () => showMainWindow());
   }).catch((error) => {
