@@ -1,0 +1,198 @@
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+
+const elements = {
+  version: $('version'),
+  appStatus: $('app-status'),
+  claudeIcon: $('claude-icon'),
+  claudeStatus: $('claude-status'),
+  claudeDetail: $('claude-detail'),
+  lastCheck: $('last-check'),
+  checkNow: $('check-now'),
+  monitoringToggle: $('monitoring-toggle'),
+  interval: $('interval'),
+  startupToggle: $('startup-toggle'),
+  startupHint: $('startup-hint'),
+  logList: $('log-list'),
+  platformNote: $('platform-note'),
+  toast: $('toast')
+};
+
+let toastTimer = null;
+
+function showToast(message) {
+  elements.toast.textContent = message;
+  elements.toast.classList.add('visible');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => elements.toast.classList.remove('visible'), 2800);
+}
+
+function formatDate(value) {
+  if (!value) return 'todavía no hay datos';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'sin datos';
+  return new Intl.DateTimeFormat('es-SV', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: 'short'
+  }).format(date);
+}
+
+function renderLogs(logs = []) {
+  elements.logList.replaceChildren();
+
+  if (!logs.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-state';
+    empty.textContent = 'Todavía no hay actividad registrada.';
+    elements.logList.append(empty);
+    return;
+  }
+
+  for (const entry of logs.slice(0, 25)) {
+    const row = document.createElement('div');
+    row.className = 'log-row';
+
+    const time = document.createElement('span');
+    time.className = 'log-time';
+    time.textContent = formatDate(entry.at);
+
+    const message = document.createElement('span');
+    message.className = 'log-message';
+    message.textContent = entry.message || 'Actividad registrada.';
+
+    row.append(time, message);
+    elements.logList.append(row);
+  }
+}
+
+function renderSnapshot(snapshot) {
+  if (!snapshot) return;
+
+  const settings = snapshot.settings || {};
+  const monitor = snapshot.monitor || {};
+  elements.version.textContent = `V${snapshot.appVersion || '1.0.0'} · Beta 1`;
+  elements.monitoringToggle.checked = Boolean(settings.monitoringEnabled);
+  elements.interval.value = String(settings.checkIntervalMinutes || 5);
+  elements.startupToggle.checked = Boolean(
+    snapshot.startup ? snapshot.startup.enabled : settings.startWithWindows
+  );
+
+  if (snapshot.platform === 'win32') {
+    elements.platformNote.textContent = 'Preparado para Windows';
+    elements.startupToggle.disabled = false;
+    elements.startupHint.textContent = 'La app podrá arrancar en segundo plano al iniciar sesión.';
+  } else {
+    elements.platformNote.textContent = 'Inicio automático disponible en Windows';
+    elements.startupToggle.disabled = true;
+    elements.startupHint.textContent = 'Esta opción está disponible en Windows.';
+  }
+
+  if (settings.monitoringEnabled) {
+    elements.appStatus.classList.add('online');
+    elements.appStatus.innerHTML = '<i></i> Vigilancia activa';
+  } else {
+    elements.appStatus.classList.remove('online');
+    elements.appStatus.innerHTML = '<i></i> Vigilancia pausada';
+  }
+
+  if (monitor.claudeRunning === true) {
+    elements.claudeIcon.textContent = '✓';
+    elements.claudeStatus.textContent = 'Claude está abierto';
+    elements.claudeDetail.textContent = 'Se detectó el proceso de Claude Desktop en Windows.';
+  } else if (monitor.claudeRunning === false) {
+    elements.claudeIcon.textContent = '–';
+    elements.claudeStatus.textContent = 'Claude está cerrado';
+    elements.claudeDetail.textContent = 'No se detectó el proceso de Claude Desktop.';
+  } else {
+    elements.claudeIcon.textContent = '?';
+    elements.claudeStatus.textContent = 'Sin comprobar';
+    elements.claudeDetail.textContent = 'Aún no hay un resultado de comprobación.';
+  }
+
+  elements.lastCheck.textContent = `Última revisión: ${formatDate(monitor.lastCheckAt)}`;
+  renderLogs(snapshot.logs || []);
+}
+
+async function loadSnapshot() {
+  try {
+    const snapshot = await window.autoContinue.getSnapshot();
+    renderSnapshot(snapshot);
+  } catch (error) {
+    showToast('No se pudo cargar la configuración.');
+    console.error(error);
+  }
+}
+
+elements.checkNow.addEventListener('click', async () => {
+  elements.checkNow.disabled = true;
+  elements.checkNow.textContent = 'Comprobando...';
+  try {
+    const result = await window.autoContinue.checkNow();
+    renderSnapshot(result);
+    showToast(result.processCheck?.message || 'Comprobación completada.');
+  } catch (error) {
+    showToast('Falló la comprobación.');
+    console.error(error);
+  } finally {
+    elements.checkNow.disabled = false;
+    elements.checkNow.textContent = 'Comprobar ahora';
+  }
+});
+
+elements.monitoringToggle.addEventListener('change', async () => {
+  elements.monitoringToggle.disabled = true;
+  try {
+    const snapshot = await window.autoContinue.setMonitoring(elements.monitoringToggle.checked);
+    const logs = await window.autoContinue.getSnapshot();
+    renderSnapshot({ ...snapshot, ...logs });
+    showToast(elements.monitoringToggle.checked ? 'Vigilancia activada.' : 'Vigilancia pausada.');
+  } catch (error) {
+    showToast('No se pudo cambiar la vigilancia.');
+    console.error(error);
+  } finally {
+    elements.monitoringToggle.disabled = false;
+  }
+});
+
+elements.interval.addEventListener('change', async () => {
+  try {
+    const snapshot = await window.autoContinue.setIntervalMinutes(Number(elements.interval.value));
+    renderSnapshot({ ...snapshot, logs: (await window.autoContinue.getSnapshot()).logs });
+    showToast('Intervalo actualizado.');
+  } catch (error) {
+    showToast('No se pudo actualizar el intervalo.');
+    console.error(error);
+  }
+});
+
+elements.startupToggle.addEventListener('change', async () => {
+  elements.startupToggle.disabled = true;
+  try {
+    const result = await window.autoContinue.setStartup(elements.startupToggle.checked);
+    elements.startupToggle.checked = Boolean(result.startup?.enabled);
+    if (result.startup?.error) {
+      showToast('Windows no confirmó el cambio.');
+    } else {
+      showToast(elements.startupToggle.checked
+        ? 'Inicio con Windows activado.'
+        : 'Inicio con Windows desactivado.');
+    }
+  } catch (error) {
+    elements.startupToggle.checked = !elements.startupToggle.checked;
+    showToast('No se pudo cambiar el inicio automático.');
+    console.error(error);
+  } finally {
+    elements.startupToggle.disabled = false;
+  }
+});
+
+window.autoContinue.onUpdate((payload) => {
+  window.autoContinue.getSnapshot()
+    .then((fullSnapshot) => renderSnapshot({ ...payload, ...fullSnapshot }))
+    .catch(() => renderSnapshot(payload));
+});
+
+loadSnapshot();
