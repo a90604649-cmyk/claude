@@ -14,11 +14,11 @@
         <div class="brand-mark"><span></span></div>
         <div>
           <div class="brand-name">Claude AutoContinue</div>
-          <div class="brand-subtitle">Beta 4 · Panel de control</div>
+          <div class="brand-subtitle">Beta 4.2 · Panel de control</div>
         </div>
       </div>
       <div class="topbar-right">
-        <span class="version" id="version">V0.4.0 · Beta 4</span>
+        <span class="version" id="version">V0.4.2 · Beta 4.2</span>
         <span class="status-pill" id="app-status"><i></i> Iniciando</span>
       </div>
     </header>
@@ -126,7 +126,7 @@
           </div>
           <span class="planned-tag">B4 activa</span>
         </div>
-        <p class="muted">B4 conserva el chat original y aplica reglas de horario y protección de juegos, detecta el aviso de límite mediante la accesibilidad de Windows y comprueba si Claude permite volver a escribir antes de enviar una continuación.</p>
+        <p class="muted">B4.2 conserva el chat original, aplica reglas de horario y protección de juegos, y programa una sola comprobación de Windows, detecta el aviso de límite mediante la accesibilidad de Windows y comprueba si Claude permite volver a escribir antes de enviar una continuación.</p>
         <div class="feature-line"><span class="feature-dot"></span> No intenta enviar mensajes de prueba</div>
         <div class="feature-line"><span class="feature-dot"></span> No intenta evitar ni saltarse límites</div>
       </article>
@@ -220,7 +220,7 @@
         <div class="action-row">
           <button class="button button-secondary" id="recovery-check">Comprobar estado ahora</button>
         </div>
-        <p class="hint">No envía mensajes de prueba ni intenta evitar límites. Si no puede confirmar el chat, el límite o el cuadro de mensaje, se detiene.</p>
+        <p class="hint">No envía mensajes de prueba ni intenta evitar límites. Al detectar el límite, Windows programa una comprobación única y AutoContinue se cierra durante la espera para liberar memoria. Si no puede confirmar el chat, el límite o el cuadro de mensaje, no envía nada.</p>
       </article>
     </section>
 
