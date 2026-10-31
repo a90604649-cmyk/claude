@@ -274,6 +274,60 @@ async function getClaudeWindowSnapshot() {
   };
 }
 
+
+function buildCloseScript(handle) {
+  if (!/^\\d+$/.test(String(handle))) {
+    throw new Error('Identificador de ventana no válido.');
+  }
+
+  return String.raw`
+$ErrorActionPreference = 'Stop'
+$nativeCode = @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class AutoContinueCloseNative {
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool PostMessage(IntPtr hWnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hWnd);
+}
+'@
+
+$null = Add-Type -TypeDefinition $nativeCode
+$handle = [IntPtr]::new([Int64]${handle})
+$posted = [AutoContinueCloseNative]::PostMessage($handle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+Start-Sleep -Milliseconds 300
+$response = [ordered]@{
+  closeRequested = $posted
+  windowStillExists = [AutoContinueCloseNative]::IsWindow($handle)
+}
+ConvertTo-Json -InputObject $response -Compress
+`;
+}
+
+async function closeClaudeMainWindow() {
+  if (process.platform !== 'win32') {
+    return { supported: false, closed: false, message: 'Cerrar la ventana de Claude está disponible en Windows.' };
+  }
+
+  const snapshot = await getClaudeWindowSnapshot();
+  if (!snapshot.mainWindow) {
+    return { supported: true, closed: false, message: 'No se encontró una ventana principal de Claude para cerrar.' };
+  }
+
+  const result = await runPowerShell(buildCloseScript(snapshot.mainWindow.handle));
+  return {
+    supported: true,
+    closed: result.closeRequested === true,
+    stillExists: result.windowStillExists === true,
+    message: result.closeRequested === true
+      ? 'Se solicitó cerrar la ventana principal que AutoContinue abrió para la comprobación.'
+      : 'Windows no aceptó la solicitud para cerrar la ventana principal.'
+  };
+}
+
 async function activateClaudeMainWindow() {
   if (process.platform !== 'win32') {
     return {
@@ -360,6 +414,8 @@ async function activateClaudeMainWindow() {
 
 module.exports = {
   activateClaudeMainWindow,
+  buildCloseScript,
+  closeClaudeMainWindow,
   getClaudeWindowSnapshot,
   isQuickEntryWindow,
   selectMainClaudeWindow
