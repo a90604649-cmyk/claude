@@ -15,20 +15,20 @@ const LIMIT_PATTERNS = [
   /has alcanzado (?:tu|el) l[ií]mite/i,
   /l[ií]mite de uso alcanzad[oa]/i,
   /l[ií]mite de sesi[oó]n alcanzad[oa]/i,
-  /te quedaste sin.{0,100}\\bmensajes?\\b/i,
-  /sin\\s+mensajes?\\s+(?:gratuitos|gratis)/i
+  /te quedaste sin.{0,100}\bmensajes?\b/i,
+  /sin\s+mensajes?\s+(?:gratuitos|gratis)/i
 ];
 
 function parseResetTime(text, now = new Date()) {
   const value = String(text || '');
   const match = value.match(
-    /(?:resets?|se restablece|se reinicia)(?:\s+(?:at|a(?:\s+las)?))?\s+(\d{1,2}):(\d{2})\s*(AM|PM)?/i
+    /(?:resets?|se restablece|se reinicia|hasta)(?:\s+(?:at|a(?:\s+las?)?|las?))?\s*(\d{1,2}):(\d{2})\s*(AM|PM|a\.?\s*m\.?|p\.?\s*m\.?)?/i
   );
   if (!match) return null;
 
   let hour = Number(match[1]);
   const minute = Number(match[2]);
-  const rawMeridiem = match[3]?.toUpperCase().replace(/[.\\s]/g, '');
+  const rawMeridiem = match[3]?.toUpperCase().replace(/[.\s]/g, '');
   const meridiem = rawMeridiem === 'AM' ? 'AM' : rawMeridiem === 'PM' ? 'PM' : undefined;
 
   if (minute > 59 || hour > 23 || (meridiem && (hour < 1 || hour > 12))) return null;
