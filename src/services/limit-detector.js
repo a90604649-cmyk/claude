@@ -249,6 +249,13 @@ async function inspectClaudeLimit(now = new Date()) {
           : 'No se encontró un aviso de límite, pero tampoco se pudo confirmar un cuadro de mensaje habilitado. El resultado es indeterminado.'
     };
   } catch (error) {
+    const stderr = String(error.stderr || '').trim();
+    const stdout = String(error.stdout || '').trim();
+    const diagnostic = [error.message, stderr, stdout]
+      .filter(Boolean)
+      .join(' | ')
+      .slice(0, 1800);
+
     return {
       supported: true,
       processRunning: null,
@@ -256,7 +263,7 @@ async function inspectClaudeLimit(now = new Date()) {
       blocked: null,
       composerEnabled: false,
       message: 'No se pudo inspeccionar el estado de Claude.',
-      error: error.message
+      error: diagnostic || 'Error sin detalle disponible.'
     };
   }
 }
