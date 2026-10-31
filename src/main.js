@@ -65,8 +65,8 @@ async function getDashboardSnapshot(extra = {}) {
     appVersion: app.getVersion(),
     startup: getWindowsStartupStatus(app),
     platform: process.platform,
-    limitDetectionImplemented: false,
-    automaticContinueImplemented: false,
+    limitDetectionImplemented: true,
+    automaticContinueImplemented: true,
     ...extra
   };
 }
@@ -183,6 +183,7 @@ function updateTrayMenu() {
       click: () => {
         isQuitting = true;
         scheduler?.dispose();
+        recoveryController?.dispose();
         app.quit();
       }
     }
@@ -270,6 +271,14 @@ function registerIpcHandlers() {
     const value = await scheduler.setIntervalMinutes(minutes);
     await store.log('info', `Intervalo de comprobación ajustado a ${value.settings.checkIntervalMinutes} minutos.`);
     recoveryController?.schedule();
+    return getDashboardSnapshot();
+  });
+
+  ipcMain.handle('app:set-fallback-wait', async (_event, minutes) => {
+    const allowed = [300, 360, 480];
+    const value = allowed.includes(Number(minutes)) ? Number(minutes) : 300;
+    await store.updateSettings({ fallbackWaitMinutes: value });
+    await store.log('info', `Espera de respaldo ajustada a ${value} minutos.`);
     return getDashboardSnapshot();
   });
 
