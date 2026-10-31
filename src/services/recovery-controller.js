@@ -13,7 +13,8 @@ class RecoveryController {
     openConversation,
     activateMainWindow,
     sendMessage,
-    onUpdate
+    onUpdate,
+    delay = wait
   }) {
     this.store = store;
     this.inspectLimit = inspectLimit;
@@ -21,6 +22,7 @@ class RecoveryController {
     this.activateMainWindow = activateMainWindow;
     this.sendMessage = sendMessage;
     this.onUpdate = onUpdate;
+    this.delay = delay;
     this.timer = null;
     this.running = false;
   }
@@ -158,7 +160,7 @@ class RecoveryController {
 
       await this.setStatus('opening_original_chat', 'Abriendo la conversación original guardada.');
       await this.openConversation(conversationId);
-      await wait(1400);
+      await this.delay(1400);
 
       const activation = await this.activateMainWindow();
       if (!activation || activation.status !== 'focused') {
@@ -227,7 +229,7 @@ class RecoveryController {
 
   async waitForClaudeWindow() {
     for (let attempt = 0; attempt < 20; attempt += 1) {
-      await wait(1000);
+      await this.delay(1000);
       const result = await this.inspectLimit();
       if (result.processRunning === true && result.mainWindowFound) {
         return result;
