@@ -8,6 +8,11 @@ const elements = {
   claudeIcon: $('claude-icon'),
   claudeStatus: $('claude-status'),
   claudeDetail: $('claude-detail'),
+  mainWindowIcon: $('main-window-icon'),
+  mainWindowStatus: $('main-window-status'),
+  mainWindowDetail: $('main-window-detail'),
+  mainWindowCheck: $('main-window-check'),
+  activateMainWindow: $('activate-main-window'),
   lastCheck: $('last-check'),
   checkNow: $('check-now'),
   monitoringToggle: $('monitoring-toggle'),
@@ -73,7 +78,7 @@ function renderSnapshot(snapshot) {
 
   const settings = snapshot.settings || {};
   const monitor = snapshot.monitor || {};
-  elements.version.textContent = `V${snapshot.appVersion || '1.0.0'} · Beta 1`;
+  elements.version.textContent = `V${snapshot.appVersion || '1.0.0'} · Beta 2`;
   elements.monitoringToggle.checked = Boolean(settings.monitoringEnabled);
   elements.interval.value = String(settings.checkIntervalMinutes || 5);
   elements.startupToggle.checked = Boolean(
@@ -112,6 +117,41 @@ function renderSnapshot(snapshot) {
     elements.claudeDetail.textContent = 'Aún no hay un resultado de comprobación.';
   }
 
+  const mainStatus = monitor.claudeMainWindowStatus || 'unknown';
+  if (mainStatus === 'focused') {
+    elements.mainWindowIcon.textContent = '✓';
+    elements.mainWindowStatus.textContent = 'Chat principal activo';
+    elements.mainWindowDetail.textContent = monitor.quickEntryDetected
+      ? 'Se activó la ventana grande. La ventanita «¿Qué necesitas?» fue ignorada.'
+      : 'Se activó la ventana principal de Claude.';
+  } else if (mainStatus === 'main_window_not_found') {
+    elements.mainWindowIcon.textContent = '!';
+    elements.mainWindowStatus.textContent = 'Chat principal no encontrado';
+    elements.mainWindowDetail.textContent = monitor.quickEntryDetected
+      ? 'Solo se identificó la ventana pequeña. No se escribirá allí.'
+      : 'Claude está abierto, pero no se encontró una ventana grande de chat.';
+  } else if (mainStatus === 'not_running') {
+    elements.mainWindowIcon.textContent = '–';
+    elements.mainWindowStatus.textContent = 'Claude está cerrado';
+    elements.mainWindowDetail.textContent = 'Abre Claude Desktop y vuelve a probar.';
+  } else if (mainStatus === 'focus_failed') {
+    elements.mainWindowIcon.textContent = '!';
+    elements.mainWindowStatus.textContent = 'No quedó en primer plano';
+    elements.mainWindowDetail.textContent = 'Se encontró el chat principal, pero Windows no confirmó el enfoque.';
+  } else if (mainStatus === 'error') {
+    elements.mainWindowIcon.textContent = '!';
+    elements.mainWindowStatus.textContent = 'Error de activación';
+    elements.mainWindowDetail.textContent = 'Revisa el registro de actividad para ver el motivo.';
+  } else {
+    elements.mainWindowIcon.textContent = '↗';
+    elements.mainWindowStatus.textContent = 'Sin comprobar';
+    elements.mainWindowDetail.textContent = 'Busca y activa la ventana grande del chat, no la ventanita «¿Qué necesitas?».';
+  }
+
+  elements.mainWindowCheck.textContent = monitor.lastMainWindowCheckAt
+    ? `Último intento: ${formatDate(monitor.lastMainWindowCheckAt)}`
+    : 'Todavía no se ha activado';
+
   elements.lastCheck.textContent = `Última revisión: ${formatDate(monitor.lastCheckAt)}`;
   renderLogs(snapshot.logs || []);
 }
@@ -125,6 +165,23 @@ async function loadSnapshot() {
     console.error(error);
   }
 }
+
+elements.activateMainWindow.addEventListener('click', async () => {
+  elements.activateMainWindow.disabled = true;
+  elements.activateMainWindow.textContent = 'Buscando ventana...';
+
+  try {
+    const result = await window.autoContinue.activateClaudeMainWindow();
+    renderSnapshot(result);
+    showToast(result.mainWindowResult?.message || 'Comprobación terminada.');
+  } catch (error) {
+    showToast('No se pudo activar el chat principal.');
+    console.error(error);
+  } finally {
+    elements.activateMainWindow.disabled = false;
+    elements.activateMainWindow.textContent = 'Abrir chat principal';
+  }
+});
 
 elements.checkNow.addEventListener('click', async () => {
   elements.checkNow.disabled = true;
