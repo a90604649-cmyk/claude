@@ -178,7 +178,7 @@ function renderSnapshot(snapshot) {
   elements.confirmConversation.disabled = !settings.conversationId || !monitor.lastChatOpenedForVerificationAt;
   elements.automationToggle.checked = Boolean(settings.automationEnabled);
   elements.automationToggle.disabled = !settings.conversationId || !settings.conversationVerified;
-  elements.fallbackWait.value = String(settings.fallbackWaitMinutes || 300);
+  elements.fallbackWait.value = String(settings.fallbackWaitMinutes || 302);
   elements.recoveryInterval.value = String(settings.recoveryCheckIntervalMinutes || 1);
   elements.schoolScheduleToggle.checked = settings.schoolScheduleEnabled !== false;
   elements.schoolStartTime.value = settings.schoolStartTime || '13:00';
