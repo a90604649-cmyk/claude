@@ -7,6 +7,9 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+const GAME_RETRY_MS = 5 * 60 * 1000;
+const BLOCKED_RETRY_MS = 2 * 60 * 1000;
+
 class RecoveryController {
   constructor({
     store,
@@ -14,6 +17,7 @@ class RecoveryController {
     openConversation,
     activateMainWindow,
     sendMessage,
+    closeMainWindow = async () => ({ closed: false }),
     onUpdate,
     delay = wait,
     detectGame = detectBlockingGame,
@@ -24,11 +28,13 @@ class RecoveryController {
     this.openConversation = openConversation;
     this.activateMainWindow = activateMainWindow;
     this.sendMessage = sendMessage;
+    this.closeMainWindow = closeMainWindow;
     this.onUpdate = onUpdate;
     this.delay = delay;
     this.detectGame = detectGame;
     this.clock = clock;
-    this.timer = null;
+    this.pollTimer = null;
+    this.dueTimer = null;
     this.startupTimer = null;
     this.running = false;
   }
@@ -49,37 +55,45 @@ class RecoveryController {
       await this.store.log('warning', 'Se requiere revisión manual para evitar duplicar una continuación.');
     }
 
-    if (snapshot.settings.automationEnabled) {
-      await this.store.log('info', 'AutoContinue inició en segundo plano. La primera evaluación se hará dentro de 1 minuto.');
-      this.schedule({ initialDelayMs: 60_000, source: 'inicio de Windows' });
-    }
+    if (!snapshot.settings.automationEnabled) return;
+
+    await this.store.log('info', 'AutoContinue inició en segundo plano. Esperará 1 minuto antes de su primera evaluación.');
+    this.schedule({ initialDelayMs: 60_000, source: 'inicio de Windows' });
   }
 
   schedule({ initialDelayMs = 0, source = 'automático' } = {}) {
-    this.stopTimer();
-    if (!this.store.snapshot().settings.automationEnabled) return;
+    this.stopTimers();
+    const snapshot = this.store.snapshot();
+    if (!snapshot.settings.automationEnabled) return;
 
-    const begin = () => {
+    if (snapshot.monitor.taskPending === true) {
+      this.schedulePendingCheck({ minimumDelayMs: initialDelayMs, source });
+      return;
+    }
+
+    const beginPolling = () => {
       this.startupTimer = null;
       this.tick(source).catch(() => {});
-      this.timer = setInterval(() => {
-        this.tick('automático').catch(() => {});
+      this.pollTimer = setInterval(() => {
+        this.tick('detección de límite').catch(() => {});
       }, this.intervalMs());
     };
 
     if (initialDelayMs > 0) {
-      this.startupTimer = setTimeout(begin, initialDelayMs);
+      this.startupTimer = setTimeout(beginPolling, initialDelayMs);
     } else {
-      this.timer = setInterval(() => {
-        this.tick('automático').catch(() => {});
-      }, this.intervalMs());
+      beginPolling();
     }
   }
 
-  stopTimer() {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+  stopTimers() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+    if (this.dueTimer) {
+      clearTimeout(this.dueTimer);
+      this.dueTimer = null;
     }
     if (this.startupTimer) {
       clearTimeout(this.startupTimer);
@@ -87,9 +101,32 @@ class RecoveryController {
     }
   }
 
+  schedulePendingCheck({ minimumDelayMs = 0, source = 'hora programada' } = {}) {
+    if (this.dueTimer) {
+      clearTimeout(this.dueTimer);
+      this.dueTimer = null;
+    }
+    if (!this.store.snapshot().settings.automationEnabled) return;
+
+    const state = this.store.snapshot().monitor;
+    if (state.taskPending !== true) {
+      this.schedule();
+      return;
+    }
+
+    const dueAt = state.nextEligibleAt ? Date.parse(state.nextEligibleAt) : this.clock().getTime();
+    const remaining = Number.isFinite(dueAt) ? Math.max(0, dueAt - this.clock().getTime()) : 0;
+    const waitMs = Math.max(remaining, Math.max(0, minimumDelayMs));
+
+    this.dueTimer = setTimeout(() => {
+      this.dueTimer = null;
+      this.tick(source).catch(() => {});
+    }, waitMs);
+  }
+
   async onSystemResume() {
     if (!this.store.snapshot().settings.automationEnabled) return;
-    await this.store.log('info', 'Windows salió de suspensión. La comprobación se realizará dentro de 1 minuto.');
+    await this.store.log('info', 'Windows salió de suspensión. Se evaluarán las reglas dentro de 1 minuto.');
     this.schedule({ initialDelayMs: 60_000, source: 'reactivación de Windows' });
   }
 
@@ -108,7 +145,7 @@ class RecoveryController {
       this.schedule();
       await this.tick('activación');
     } else {
-      this.stopTimer();
+      this.stopTimers();
     }
 
     return this.store.snapshot();
@@ -124,6 +161,27 @@ class RecoveryController {
         processName: block.processName || null
       });
     }
+  }
+
+  nextSchoolAllowedTime(now, settings) {
+    const next = new Date(now);
+    const end = String(settings.schoolEndTime || '18:00').split(':').map(Number);
+    next.setHours(end[0], end[1], 0, 0);
+    return next;
+  }
+
+  async deferPending(status, message, dueAt, details = {}) {
+    await this.store.updateMonitor({
+      nextEligibleAt: dueAt.toISOString(),
+      recoveryStatus: status,
+      recoveryMessage: message
+    });
+    await this.store.log('info', message, {
+      ...details,
+      nextCheckAt: dueAt.toISOString()
+    });
+    this.emitUpdate();
+    this.schedulePendingCheck({ source: status === 'blocked_by_game' ? 'revisión de juego' : 'fin del horario bloqueado' });
   }
 
   async tick(source = 'manual') {
@@ -146,32 +204,52 @@ class RecoveryController {
     try {
       let state = this.store.snapshot();
 
-      // Once a task is pending, apply local quiet-hours/game rules before launching
-      // PowerShell or inspecting Claude. This avoids unnecessary work and interruptions.
+      // While a limit is pending, do not inspect Claude until the saved five-hour timer expires.
       if (state.monitor.taskPending === true) {
-        const schoolBlock = getSchoolScheduleBlock(this.clock(), state.settings);
+        const nextCheck = state.monitor.nextEligibleAt ? Date.parse(state.monitor.nextEligibleAt) : 0;
+        const now = this.clock();
+        if (nextCheck && now.getTime() < nextCheck) {
+          await this.setStatus(
+            'waiting_limit',
+            `Claude permanece cerrado. Próxima comprobación programada para ${new Date(nextCheck).toLocaleString()}.`
+          );
+          this.schedulePendingCheck({ source: 'hora de restablecimiento' });
+          return this.store.snapshot();
+        }
+
+        const schoolBlock = getSchoolScheduleBlock(now, state.settings);
         if (schoolBlock) {
           await this.applyExecutionBlock(schoolBlock);
+          await this.deferPending(
+            schoolBlock.status,
+            schoolBlock.message,
+            this.nextSchoolAllowedTime(now, state.settings),
+            { reason: schoolBlock.reason }
+          );
           return this.store.snapshot();
         }
 
         if (state.settings.gameProtectionEnabled !== false) {
-          const activeGame = await this.detectGame();
-          if (activeGame) {
+          const game = await this.detectGame();
+          if (game) {
+            const message = `No se ejecutó: ${game.name} está abierto. Se volverá a comprobar en 5 minutos.`;
             await this.applyExecutionBlock({
               status: 'blocked_by_game',
               reason: 'game_active',
-              processName: activeGame.processName,
-              message: `No se ejecutó: ${activeGame.name} está abierto. AutoContinue esperará a que cierres el juego.`
+              processName: game.processName,
+              message
+            });
+            await this.deferPending('blocked_by_game', message, new Date(now.getTime() + GAME_RETRY_MS), {
+              reason: 'game_active',
+              processName: game.processName
             });
             return this.store.snapshot();
           }
         }
       }
 
-      const inspection = await this.inspectLimit();
+      let inspection = await this.inspectLimit();
 
-      // Always record an active limit as soon as it is visible, even during class hours or a game.
       if (inspection.processRunning === true && inspection.blocked === true) {
         await this.recordLimit(inspection);
         return this.store.snapshot();
@@ -179,6 +257,9 @@ class RecoveryController {
 
       if (inspection.processRunning === null) {
         await this.setStatus('inspection_unavailable', inspection.message || 'No se pudo inspeccionar Claude. No se enviará nada.');
+        if (state.monitor.taskPending) {
+          await this.deferPending('inspection_unavailable', inspection.message || 'No se pudo inspeccionar Claude. Se reintentará en 2 minutos.', new Date(this.clock().getTime() + BLOCKED_RETRY_MS), { reason: 'inspection_unavailable' });
+        }
         return this.store.snapshot();
       }
 
@@ -189,49 +270,45 @@ class RecoveryController {
         return this.store.snapshot();
       }
 
-      const now = this.clock().getTime();
-      const eligibleAt = state.monitor.nextEligibleAt
-        ? Date.parse(state.monitor.nextEligibleAt)
-        : 0;
-
-      // When Claude is closed, wait for the stored reset time without opening it early.
-      if (inspection.processRunning === false && eligibleAt && now < eligibleAt) {
-        await this.setStatus(
-          'waiting_limit',
-          `Claude está cerrado. Próxima evaluación después de ${new Date(eligibleAt).toLocaleString()}.`
-        );
-        return this.store.snapshot();
-      }
-
-      let readyInspection = inspection;
+      // The five-hour wait has expired and local rules allow a check. Open Claude only now.
+      let openedByController = false;
+      let conversationAlreadyOpened = false;
       if (inspection.processRunning === false || inspection.mainWindowFound !== true) {
-        await this.setStatus('opening_claude', 'La hora de espera terminó. Se comprobará Claude para confirmar que el límite desapareció.');
+        await this.setStatus('opening_claude', 'Terminó la espera. Abriendo Claude para comprobar el límite una sola vez.');
+        openedByController = inspection.processRunning === false;
         await this.openConversation(conversationId);
-        readyInspection = await this.waitForClaudeWindow();
-      } else if (inspection.blocked === null) {
-        await this.setStatus('inspection_unavailable', inspection.message || 'No se pudo leer el estado de Claude. No se enviará nada.');
+        conversationAlreadyOpened = true;
+        inspection = await this.waitForClaudeWindow();
+      }
+
+      if (inspection.blocked === true) {
+        if (openedByController) {
+          await this.closeMainWindow().catch(() => {});
+        }
+        await this.recordLimit(inspection);
         return this.store.snapshot();
       }
 
-      if (readyInspection.blocked === true) {
-        await this.recordLimit(readyInspection);
+      if (inspection.blocked !== false) {
+        if (openedByController) {
+          await this.closeMainWindow().catch(() => {});
+        }
+        const message = inspection.message || 'No se pudo confirmar si el límite desapareció. No se enviará nada; se reintentará en 2 minutos.';
+        await this.deferPending('inspection_unavailable', message, new Date(this.clock().getTime() + BLOCKED_RETRY_MS), {
+          reason: 'inspection_unavailable'
+        });
         return this.store.snapshot();
       }
 
-      if (readyInspection.blocked !== false) {
-        await this.setStatus('inspection_unavailable', 'No se pudo confirmar que Claude esté disponible. No se enviará nada.');
-        return this.store.snapshot();
-      }
-
-      // Re-check game protection immediately before taking focus from the user's desktop.
+      // Re-check the protected applications immediately before opening/focusing the saved chat.
       if (state.settings.gameProtectionEnabled !== false) {
         const game = await this.detectGame();
         if (game) {
-          await this.applyExecutionBlock({
-            status: 'blocked_by_game',
+          if (openedByController) await this.closeMainWindow().catch(() => {});
+          const message = `No se ejecutó: ${game.name} está abierto. Se volverá a comprobar en 5 minutos.`;
+          await this.deferPending('blocked_by_game', message, new Date(this.clock().getTime() + GAME_RETRY_MS), {
             reason: 'game_active',
-            processName: game.processName,
-            message: `No se ejecutó: ${game.name} está abierto. AutoContinue esperará a que cierres el juego.`
+            processName: game.processName
           });
           return this.store.snapshot();
         }
@@ -239,13 +316,18 @@ class RecoveryController {
 
       state = this.store.snapshot();
 
-      await this.setStatus('opening_original_chat', 'Claude está disponible. Abriendo la conversación original guardada.');
-      await this.openConversation(conversationId);
+      if (!conversationAlreadyOpened) {
+        await this.setStatus('opening_original_chat', 'Claude está disponible. Abriendo la conversación original guardada.');
+        await this.openConversation(conversationId);
+      }
       await this.delay(1400);
 
       const activation = await this.activateMainWindow();
       if (!activation || activation.status !== 'focused') {
-        await this.setStatus('chat_not_ready', activation?.message || 'No se pudo activar el chat principal.');
+        const message = activation?.message || 'No se pudo activar el chat principal.';
+        await this.deferPending('chat_not_ready', message, new Date(this.clock().getTime() + BLOCKED_RETRY_MS), {
+          reason: 'chat_not_ready'
+        });
         return this.store.snapshot();
       }
 
@@ -256,16 +338,16 @@ class RecoveryController {
       }
 
       if (finalInspection.blocked !== false || finalInspection.composerEnabled !== true) {
-        await this.setStatus(
-          'chat_not_ready',
-          'No se pudo confirmar que el límite desapareció y que el cuadro de mensaje está habilitado. No se escribió nada.'
-        );
+        const message = 'No se pudo confirmar que el límite desapareció y que el cuadro de mensaje está habilitado. No se escribió nada; se reintentará en 2 minutos.';
+        await this.deferPending('chat_not_ready', message, new Date(this.clock().getTime() + BLOCKED_RETRY_MS), {
+          reason: 'composer_not_confirmed'
+        });
         return this.store.snapshot();
       }
 
       await this.store.updateMonitor({
         recoveryStatus: 'sending',
-        lastRecoveryAttemptAt: new Date().toISOString(),
+        lastRecoveryAttemptAt: this.clock().toISOString(),
         recoveryMessage: 'Preparando una única continuación en la conversación verificada.'
       });
       await this.store.persist();
@@ -290,13 +372,14 @@ class RecoveryController {
         taskPending: false,
         limitDetectedAt: null,
         limitResetAt: null,
-        lastContinuationAt: new Date().toISOString(),
+        lastContinuationAt: this.clock().toISOString(),
         nextEligibleAt: null,
         recoveryMessage: 'La continuación fue enviada a la conversación original.',
         continuationSentForLimit: true
       });
       await this.store.log('info', 'Se envió una continuación a la conversación original.', { source });
       this.emitUpdate();
+      this.schedule();
       return this.store.snapshot();
     } catch (error) {
       await this.setStatus('error', error.message);
@@ -304,6 +387,12 @@ class RecoveryController {
         source,
         reason: error.message
       });
+      const current = this.store.snapshot().monitor;
+      if (current.taskPending) {
+        await this.deferPending('error', error.message, new Date(this.clock().getTime() + BLOCKED_RETRY_MS), {
+          reason: 'recovery_error'
+        });
+      }
       return this.store.snapshot();
     } finally {
       this.running = false;
@@ -314,9 +403,7 @@ class RecoveryController {
     for (let attempt = 0; attempt < 20; attempt += 1) {
       await this.delay(1000);
       const result = await this.inspectLimit();
-      if (result.processRunning === true && result.mainWindowFound) {
-        return result;
-      }
+      if (result.processRunning === true && result.mainWindowFound) return result;
     }
 
     return {
@@ -329,11 +416,13 @@ class RecoveryController {
 
   async recordLimit(inspection) {
     const current = this.store.snapshot().monitor;
-    const detectedAt = current.limitDetectedAt || this.clock().toISOString();
-    const fallbackMinutes = Number(this.store.snapshot().settings.fallbackWaitMinutes) || 300;
-    const nextEligibleAt = inspection.resetAt
-      || current.nextEligibleAt
-      || new Date(Date.parse(detectedAt) + fallbackMinutes * 60 * 1000).toISOString();
+    const now = this.clock();
+    const detectedAt = current.taskPending && current.limitDetectedAt
+      ? current.limitDetectedAt
+      : now.toISOString();
+    const waitMinutes = Number(this.store.snapshot().settings.fallbackWaitMinutes) || 302;
+    const isRetry = current.taskPending === true;
+    const nextEligibleAt = new Date(now.getTime() + (isRetry ? 2 : waitMinutes) * 60 * 1000).toISOString();
 
     await this.store.updateMonitor({
       taskPending: true,
@@ -342,18 +431,24 @@ class RecoveryController {
       limitResetAt: inspection.resetAt || current.limitResetAt || null,
       nextEligibleAt,
       continuationSentForLimit: false,
-      recoveryMessage: inspection.resetAt
-        ? `Claude indicó que el límite se restablece a ${new Date(inspection.resetAt).toLocaleString()}.`
-        : `No se pudo leer la hora del aviso. Se usará una espera conservadora de ${fallbackMinutes} minutos y se volverá a comprobar el estado real.`
+      recoveryMessage: isRetry
+        ? `Claude todavía muestra el límite. Se volverá a comprobar en 2 minutos, a las ${new Date(nextEligibleAt).toLocaleTimeString()}.`
+        : `Límite detectado a las ${now.toLocaleTimeString()}. Próxima comprobación programada dentro de ${waitMinutes} minutos, a las ${new Date(nextEligibleAt).toLocaleTimeString()}.`
     });
 
-    if (current.recoveryStatus !== 'waiting_limit') {
-      await this.store.log('warning', 'Claude alcanzó un límite de uso. La tarea quedó guardada para reanudarse más tarde.', {
+    if (!isRetry || current.recoveryStatus !== 'waiting_limit') {
+      await this.store.log(isRetry ? 'warning' : 'warning', isRetry
+        ? 'El límite continúa activo después de la comprobación programada.'
+        : 'Claude alcanzó un límite. Se guardó la hora exacta y se programó una única comprobación futura.', {
+        detectedAt,
         resetAt: inspection.resetAt || null,
-        nextEligibleAt
+        nextEligibleAt,
+        waitMinutes: isRetry ? 2 : waitMinutes
       });
     }
+
     this.emitUpdate();
+    this.schedulePendingCheck();
   }
 
   async setStatus(status, message) {
@@ -371,7 +466,7 @@ class RecoveryController {
   }
 
   dispose() {
-    this.stopTimer();
+    this.stopTimers();
   }
 }
 
