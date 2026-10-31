@@ -6,10 +6,14 @@ function setWindowsStartup(app, enabled) {
   }
 
   try {
+    const args = app.isPackaged
+      ? ['--autostart']
+      : [app.getAppPath(), '--autostart'];
+
     app.setLoginItemSettings({
       openAtLogin: Boolean(enabled),
       path: process.execPath,
-      args: ['--autostart']
+      args
     });
 
     const actual = app.getLoginItemSettings();
