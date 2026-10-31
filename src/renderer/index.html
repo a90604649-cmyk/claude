@@ -196,6 +196,28 @@
             <option value="480">8 horas</option>
           </select>
         </div>
+        <div class="policy-panel">
+          <p class="eyebrow">REGLAS INTELIGENTES DE EJECUCIÓN</p>
+          <label class="switch-row" for="school-schedule-toggle">
+            <span>
+              <strong>Bloquear durante clases</strong>
+              <small>De lunes a viernes; no abrirá Claude ni continuará en este horario.</small>
+            </span>
+            <input class="switch" type="checkbox" id="school-schedule-toggle">
+          </label>
+          <div class="time-range">
+            <label for="school-start-time">Desde <input id="school-start-time" type="time" value="13:00"></label>
+            <label for="school-end-time">Hasta <input id="school-end-time" type="time" value="18:00"></label>
+          </div>
+          <label class="switch-row" for="game-protection-toggle">
+            <span>
+              <strong>Evitar interrupciones por juegos</strong>
+              <small>SKLauncher, Minecraft Java (java.exe/javaw.exe), Minecraft y Roblox Player. Roblox Studio no bloquea.</small>
+            </span>
+            <input class="switch" type="checkbox" id="game-protection-toggle">
+          </label>
+          <p class="hint">Al iniciar Windows o volver de suspensión, esperará 1 minuto antes de evaluar estas reglas.</p>
+        </div>
         <div class="action-row">
           <button class="button button-secondary" id="recovery-check">Comprobar estado ahora</button>
         </div>
