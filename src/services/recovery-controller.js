@@ -1,6 +1,7 @@
 'use strict';
 
 const { DEFAULT_CONTINUE_PROMPT, extractConversationId } = require('./conversation');
+const { detectBlockingGame, getSchoolScheduleBlock } = require('./execution-policy');
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -14,7 +15,9 @@ class RecoveryController {
     activateMainWindow,
     sendMessage,
     onUpdate,
-    delay = wait
+    delay = wait,
+    detectGame = detectBlockingGame,
+    clock = () => new Date()
   }) {
     this.store = store;
     this.inspectLimit = inspectLimit;
@@ -23,7 +26,10 @@ class RecoveryController {
     this.sendMessage = sendMessage;
     this.onUpdate = onUpdate;
     this.delay = delay;
+    this.detectGame = detectGame;
+    this.clock = clock;
     this.timer = null;
+    this.startupTimer = null;
     this.running = false;
   }
 
@@ -44,18 +50,30 @@ class RecoveryController {
     }
 
     if (snapshot.settings.automationEnabled) {
-      this.schedule();
-      await this.tick('inicio');
+      await this.store.log('info', 'AutoContinue inició en segundo plano. La primera evaluación se hará dentro de 1 minuto.');
+      this.schedule({ initialDelayMs: 60_000, source: 'inicio de Windows' });
     }
   }
 
-  schedule() {
+  schedule({ initialDelayMs = 0, source = 'automático' } = {}) {
     this.stopTimer();
     if (!this.store.snapshot().settings.automationEnabled) return;
 
-    this.timer = setInterval(() => {
-      this.tick('automático').catch(() => {});
-    }, this.intervalMs());
+    const begin = () => {
+      this.startupTimer = null;
+      this.tick(source).catch(() => {});
+      this.timer = setInterval(() => {
+        this.tick('automático').catch(() => {});
+      }, this.intervalMs());
+    };
+
+    if (initialDelayMs > 0) {
+      this.startupTimer = setTimeout(begin, initialDelayMs);
+    } else {
+      this.timer = setInterval(() => {
+        this.tick('automático').catch(() => {});
+      }, this.intervalMs());
+    }
   }
 
   stopTimer() {
@@ -63,6 +81,16 @@ class RecoveryController {
       clearInterval(this.timer);
       this.timer = null;
     }
+    if (this.startupTimer) {
+      clearTimeout(this.startupTimer);
+      this.startupTimer = null;
+    }
+  }
+
+  async onSystemResume() {
+    if (!this.store.snapshot().settings.automationEnabled) return;
+    await this.store.log('info', 'Windows salió de suspensión. La comprobación se realizará dentro de 1 minuto.');
+    this.schedule({ initialDelayMs: 60_000, source: 'reactivación de Windows' });
   }
 
   async configure(enabled) {
@@ -86,6 +114,18 @@ class RecoveryController {
     return this.store.snapshot();
   }
 
+  async applyExecutionBlock(block) {
+    const current = this.store.snapshot().monitor;
+    if (current.recoveryStatus !== block.status || current.recoveryMessage !== block.message) {
+      await this.setStatus(block.status, block.message);
+      await this.store.log('info', block.message, {
+        reason: block.reason,
+        localTime: block.localTime || this.clock().toLocaleString(),
+        processName: block.processName || null
+      });
+    }
+  }
+
   async tick(source = 'manual') {
     if (this.running) return this.store.snapshot();
 
@@ -105,9 +145,9 @@ class RecoveryController {
     this.running = true;
     try {
       let state = this.store.snapshot();
-      let now = Date.now();
-      let inspection = await this.inspectLimit();
+      const inspection = await this.inspectLimit();
 
+      // Always record an active limit as soon as it is visible, even during class hours or a game.
       if (inspection.processRunning === true && inspection.blocked === true) {
         await this.recordLimit(inspection);
         return this.store.snapshot();
@@ -125,40 +165,78 @@ class RecoveryController {
         return this.store.snapshot();
       }
 
+      // School hours take priority over every other rule. No chat is opened during this block.
+      const schoolBlock = getSchoolScheduleBlock(this.clock(), state.settings);
+      if (schoolBlock) {
+        await this.applyExecutionBlock(schoolBlock);
+        return this.store.snapshot();
+      }
+
+      const now = this.clock().getTime();
       const eligibleAt = state.monitor.nextEligibleAt
         ? Date.parse(state.monitor.nextEligibleAt)
         : 0;
 
+      // When Claude is closed, wait for the stored reset time without opening it early.
       if (inspection.processRunning === false && eligibleAt && now < eligibleAt) {
         await this.setStatus(
           'waiting_limit',
-          `Claude está cerrado. Próxima comprobación después de ${new Date(eligibleAt).toLocaleString()}.`
+          `Claude está cerrado. Próxima evaluación después de ${new Date(eligibleAt).toLocaleString()}.`
         );
         return this.store.snapshot();
       }
 
+      // Only inspect game processes when a continuation could actually be attempted.
+      if (state.settings.gameProtectionEnabled !== false) {
+        const game = await this.detectGame();
+        if (game) {
+          await this.applyExecutionBlock({
+            status: 'blocked_by_game',
+            reason: 'game_active',
+            processName: game.processName,
+            message: `No se ejecutó: ${game.name} está abierto. AutoContinue esperará a que cierres el juego.`
+          });
+          return this.store.snapshot();
+        }
+      }
+
+      let readyInspection = inspection;
       if (inspection.processRunning === false || inspection.mainWindowFound !== true) {
-        await this.setStatus('opening_claude', 'Se abrirá Claude directamente en la conversación guardada.');
+        await this.setStatus('opening_claude', 'La hora de espera terminó. Se comprobará Claude para confirmar que el límite desapareció.');
         await this.openConversation(conversationId);
-        inspection = await this.waitForClaudeWindow();
+        readyInspection = await this.waitForClaudeWindow();
       } else if (inspection.blocked === null) {
         await this.setStatus('inspection_unavailable', inspection.message || 'No se pudo leer el estado de Claude. No se enviará nada.');
         return this.store.snapshot();
       }
 
-      if (inspection.blocked === true) {
-        await this.recordLimit(inspection);
+      if (readyInspection.blocked === true) {
+        await this.recordLimit(readyInspection);
         return this.store.snapshot();
       }
 
-      if (inspection.blocked !== false) {
+      if (readyInspection.blocked !== false) {
         await this.setStatus('inspection_unavailable', 'No se pudo confirmar que Claude esté disponible. No se enviará nada.');
         return this.store.snapshot();
       }
 
+      // Re-check game protection immediately before taking focus from the user's desktop.
+      if (state.settings.gameProtectionEnabled !== false) {
+        const game = await this.detectGame();
+        if (game) {
+          await this.applyExecutionBlock({
+            status: 'blocked_by_game',
+            reason: 'game_active',
+            processName: game.processName,
+            message: `No se ejecutó: ${game.name} está abierto. AutoContinue esperará a que cierres el juego.`
+          });
+          return this.store.snapshot();
+        }
+      }
+
       state = this.store.snapshot();
 
-      await this.setStatus('opening_original_chat', 'Abriendo la conversación original guardada.');
+      await this.setStatus('opening_original_chat', 'Claude está disponible. Abriendo la conversación original guardada.');
       await this.openConversation(conversationId);
       await this.delay(1400);
 
@@ -248,8 +326,7 @@ class RecoveryController {
 
   async recordLimit(inspection) {
     const current = this.store.snapshot().monitor;
-    const now = new Date();
-    const detectedAt = current.limitDetectedAt || now.toISOString();
+    const detectedAt = current.limitDetectedAt || this.clock().toISOString();
     const fallbackMinutes = Number(this.store.snapshot().settings.fallbackWaitMinutes) || 300;
     const nextEligibleAt = inspection.resetAt
       || current.nextEligibleAt
@@ -277,6 +354,8 @@ class RecoveryController {
   }
 
   async setStatus(status, message) {
+    const current = this.store.snapshot().monitor;
+    if (current.recoveryStatus === status && current.recoveryMessage === message) return;
     await this.store.updateMonitor({
       recoveryStatus: status,
       recoveryMessage: message
@@ -285,9 +364,7 @@ class RecoveryController {
   }
 
   emitUpdate() {
-    if (this.onUpdate) {
-      this.onUpdate(this.store.snapshot());
-    }
+    if (this.onUpdate) this.onUpdate(this.store.snapshot());
   }
 
   dispose() {
