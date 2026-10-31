@@ -28,10 +28,11 @@ test('does not apply the school schedule on Saturday or Sunday', () => {
   assert.equal(getSchoolScheduleBlock(new Date(2026, 10, 1, 15, 0), settings), null);
 });
 
-test('detects CK Launcher, Minecraft and Roblox Player, but not Roblox Studio', () => {
-  assert.equal(identifyBlockingGame([{ name: 'CKLauncher.exe' }]).id, 'ck-launcher');
+test('detects SKLauncher, Minecraft Java/Bedrock and Roblox Player, but not Roblox Studio', () => {
+  assert.equal(identifyBlockingGame([{ name: 'SKLauncher.exe' }]).id, 'sklauncher');
   assert.equal(identifyBlockingGame([{ name: 'RobloxPlayerBeta.exe' }]).id, 'roblox-player');
   assert.equal(identifyBlockingGame([{ name: 'Minecraft.Windows.exe' }]).id, 'minecraft');
+  assert.equal(identifyBlockingGame([{ name: 'java.exe', commandLine: 'java net.minecraft.client.main.Main' }]).id, 'minecraft-java');
   assert.equal(identifyBlockingGame([{ name: 'javaw.exe', commandLine: 'javaw net.minecraft.client.main.Main' }]).id, 'minecraft-java');
   assert.equal(identifyBlockingGame([{ name: 'RobloxStudioBeta.exe' }]), null);
 });
