@@ -9,6 +9,7 @@ const DEFAULT_DATA = Object.freeze({
     startupPromptShown: false,
     monitoringEnabled: true,
     checkIntervalMinutes: 5,
+    recoveryCheckIntervalMinutes: 1,
     fallbackWaitMinutes: 300,
     automationEnabled: false,
     conversationId: null,
