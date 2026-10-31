@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('autoContinue', {
   setMonitoring: (enabled) => ipcRenderer.invoke('app:set-monitoring', enabled),
   setIntervalMinutes: (minutes) => ipcRenderer.invoke('app:set-interval', minutes),
   setFallbackWait: (minutes) => ipcRenderer.invoke('app:set-fallback-wait', minutes),
+  setRecoveryInterval: (minutes) => ipcRenderer.invoke('app:set-recovery-interval', minutes),
   saveConversation: (value) => ipcRenderer.invoke('app:save-conversation', value),
   openSavedChat: () => ipcRenderer.invoke('app:open-saved-chat'),
   setConversationVerified: (verified) => ipcRenderer.invoke('app:set-conversation-verified', verified),
