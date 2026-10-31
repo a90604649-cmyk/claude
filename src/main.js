@@ -177,6 +177,11 @@ function updateTrayMenu() {
         });
       }
     },
+    {
+      label: 'Comprobar recuperación',
+      enabled: snapshot?.settings.automationEnabled === true,
+      click: () => recoveryController?.tick('menú de bandeja')
+    },
     { type: 'separator' },
     {
       label: 'Salir',
