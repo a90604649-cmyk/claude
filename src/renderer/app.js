@@ -13,6 +13,16 @@ const elements = {
   mainWindowDetail: $('main-window-detail'),
   mainWindowCheck: $('main-window-check'),
   activateMainWindow: $('activate-main-window'),
+  conversationId: $('conversation-id'),
+  saveConversation: $('save-conversation'),
+  openSavedChat: $('open-saved-chat'),
+  confirmConversation: $('confirm-conversation'),
+  conversationStatus: $('conversation-status'),
+  automationToggle: $('automation-toggle'),
+  recoveryStatus: $('recovery-status'),
+  recoveryDetail: $('recovery-detail'),
+  fallbackWait: $('fallback-wait'),
+  recoveryCheck: $('recovery-check'),
   lastCheck: $('last-check'),
   checkNow: $('check-now'),
   monitoringToggle: $('monitoring-toggle'),
@@ -78,7 +88,7 @@ function renderSnapshot(snapshot) {
 
   const settings = snapshot.settings || {};
   const monitor = snapshot.monitor || {};
-  elements.version.textContent = `V${snapshot.appVersion || '1.0.0'} · Beta 2`;
+  elements.version.textContent = `V${snapshot.appVersion || '1.0.0'} · Beta 3`;
   elements.monitoringToggle.checked = Boolean(settings.monitoringEnabled);
   elements.interval.value = String(settings.checkIntervalMinutes || 5);
   elements.startupToggle.checked = Boolean(
@@ -152,6 +162,44 @@ function renderSnapshot(snapshot) {
     ? `Último intento: ${formatDate(monitor.lastMainWindowCheckAt)}`
     : 'Todavía no se ha activado';
 
+  if (document.activeElement !== elements.conversationId) {
+    elements.conversationId.value = settings.conversationId || '';
+  }
+  elements.confirmConversation.checked = Boolean(settings.conversationVerified);
+  elements.confirmConversation.disabled = !settings.conversationId || !monitor.lastChatOpenedForVerificationAt;
+  elements.automationToggle.checked = Boolean(settings.automationEnabled);
+  elements.automationToggle.disabled = !settings.conversationId || !settings.conversationVerified;
+  elements.fallbackWait.value = String(settings.fallbackWaitMinutes || 300);
+
+  if (!settings.conversationId) {
+    elements.conversationStatus.textContent = 'Todavía no hay una conversación guardada.';
+  } else if (settings.conversationVerified) {
+    elements.conversationStatus.textContent = 'Conversación original guardada y confirmada.';
+  } else if (monitor.lastChatOpenedForVerificationAt) {
+    elements.conversationStatus.textContent = 'El chat se abrió. Comprueba que sea el correcto y marca la casilla de confirmación.';
+  } else {
+    elements.conversationStatus.textContent = 'ID guardado. Pulsa «Abrir y verificar» para comprobarlo.';
+  }
+
+  const recoveryLabels = {
+    idle: 'Desactivado',
+    needs_confirmation: 'Falta confirmar el chat',
+    awaiting_confirmation: 'Esperando confirmación',
+    needs_conversation: 'Falta guardar el chat',
+    waiting_limit: 'Esperando que se restablezca',
+    opening_claude: 'Abriendo Claude',
+    opening_original_chat: 'Abriendo chat original',
+    inspection_unavailable: 'No se pudo comprobar',
+    chat_not_ready: 'Chat todavía no preparado',
+    sending: 'Enviando continuación',
+    continued: 'Tarea reanudada',
+    manual_review: 'Revisión manual necesaria',
+    error: 'Error de recuperación'
+  };
+  elements.recoveryStatus.textContent = recoveryLabels[monitor.recoveryStatus] || 'Sin estado';
+  elements.recoveryDetail.textContent = monitor.recoveryMessage ||
+    'Activa AutoContinue después de verificar la conversación original.';
+
   elements.lastCheck.textContent = `Última revisión: ${formatDate(monitor.lastCheckAt)}`;
   renderLogs(snapshot.logs || []);
 }
@@ -180,6 +228,90 @@ elements.activateMainWindow.addEventListener('click', async () => {
   } finally {
     elements.activateMainWindow.disabled = false;
     elements.activateMainWindow.textContent = 'Abrir chat principal';
+  }
+});
+
+elements.saveConversation.addEventListener('click', async () => {
+  elements.saveConversation.disabled = true;
+  try {
+    const snapshot = await window.autoContinue.saveConversation(elements.conversationId.value);
+    renderSnapshot(snapshot);
+    showToast('Conversación guardada. Ahora ábrela y verifícala.');
+  } catch (error) {
+    showToast(error.message || 'No se pudo guardar la conversación.');
+  } finally {
+    elements.saveConversation.disabled = false;
+  }
+});
+
+elements.openSavedChat.addEventListener('click', async () => {
+  elements.openSavedChat.disabled = true;
+  try {
+    const snapshot = await window.autoContinue.openSavedChat();
+    renderSnapshot(snapshot);
+    showToast('Se abrió el chat guardado. Comprueba que sea el original.');
+  } catch (error) {
+    showToast(error.message || 'No se pudo abrir el chat guardado.');
+  } finally {
+    elements.openSavedChat.disabled = false;
+  }
+});
+
+elements.confirmConversation.addEventListener('change', async () => {
+  elements.confirmConversation.disabled = true;
+  try {
+    const snapshot = await window.autoContinue.setConversationVerified(elements.confirmConversation.checked);
+    renderSnapshot(snapshot);
+    showToast(elements.confirmConversation.checked
+      ? 'Conversación original confirmada.'
+      : 'Confirmación retirada.');
+  } catch (error) {
+    elements.confirmConversation.checked = false;
+    showToast(error.message || 'No se pudo confirmar el chat.');
+  } finally {
+    const snapshot = await window.autoContinue.getSnapshot();
+    renderSnapshot(snapshot);
+  }
+});
+
+elements.automationToggle.addEventListener('change', async () => {
+  elements.automationToggle.disabled = true;
+  try {
+    const snapshot = await window.autoContinue.setAutomation(elements.automationToggle.checked);
+    renderSnapshot(snapshot);
+    showToast(elements.automationToggle.checked
+      ? 'AutoContinue automático activado.'
+      : 'AutoContinue automático pausado.');
+  } catch (error) {
+    elements.automationToggle.checked = false;
+    showToast(error.message || 'No se pudo cambiar AutoContinue.');
+    const snapshot = await window.autoContinue.getSnapshot();
+    renderSnapshot(snapshot);
+  }
+});
+
+elements.fallbackWait.addEventListener('change', async () => {
+  try {
+    const snapshot = await window.autoContinue.setFallbackWait(Number(elements.fallbackWait.value));
+    renderSnapshot(snapshot);
+    showToast('Espera de respaldo actualizada.');
+  } catch (error) {
+    showToast(error.message || 'No se pudo cambiar la espera.');
+  }
+});
+
+elements.recoveryCheck.addEventListener('click', async () => {
+  elements.recoveryCheck.disabled = true;
+  elements.recoveryCheck.textContent = 'Comprobando...';
+  try {
+    const snapshot = await window.autoContinue.recoveryCheck();
+    renderSnapshot(snapshot);
+    showToast(snapshot.monitor?.recoveryMessage || 'Comprobación terminada.');
+  } catch (error) {
+    showToast(error.message || 'No se pudo comprobar la recuperación.');
+  } finally {
+    elements.recoveryCheck.disabled = false;
+    elements.recoveryCheck.textContent = 'Comprobar estado ahora';
   }
 });
 
