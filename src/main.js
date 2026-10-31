@@ -340,7 +340,7 @@ function registerIpcHandlers() {
       continuationSentForLimit: false
     });
     await store.log('info', 'Se guardó un ID de conversación para verificarlo.');
-    recoveryController?.schedule();
+    await recoveryController?.schedule();
     return getDashboardSnapshot();
   });
 
