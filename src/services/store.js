@@ -10,7 +10,7 @@ const DEFAULT_DATA = Object.freeze({
     monitoringEnabled: true,
     checkIntervalMinutes: 5,
     recoveryCheckIntervalMinutes: 1,
-    fallbackWaitMinutes: 300,
+    fallbackWaitMinutes: 302,
     schoolScheduleEnabled: true,
     schoolStartTime: '13:00',
     schoolEndTime: '18:00',
