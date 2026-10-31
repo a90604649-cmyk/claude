@@ -7,7 +7,7 @@ const { RecoveryController } = require('../src/services/recovery-controller');
 
 const CHAT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
-function createStore({ verified = true, taskPending = false, nextEligibleAt = null } = {}) {
+function createStore({ verified = true, taskPending = false, nextEligibleAt = null, schoolScheduleEnabled = false, gameProtectionEnabled = false } = {}) {
   const data = {
     settings: {
       automationEnabled: true,
@@ -15,7 +15,11 @@ function createStore({ verified = true, taskPending = false, nextEligibleAt = nu
       conversationVerified: verified,
       checkIntervalMinutes: 5,
       fallbackWaitMinutes: 300,
-      continuePrompt: 'Continúa esta tarea en el chat original.'
+      continuePrompt: 'Continúa esta tarea en el chat original.',
+      schoolScheduleEnabled,
+      schoolStartTime: '13:00',
+      schoolEndTime: '18:00',
+      gameProtectionEnabled
     },
     monitor: {
       taskPending,
@@ -183,4 +187,66 @@ test('keeps Claude closed until the saved wait time has passed', async () => {
 
   assert.equal(opened, false);
   assert.equal(store.snapshot().monitor.recoveryStatus, 'waiting_limit');
+});
+
+
+test('does not inspect Claude during configured school hours when a task is pending', async () => {
+  const store = createStore({
+    taskPending: true,
+    schoolScheduleEnabled: true,
+    gameProtectionEnabled: true
+  });
+  let inspected = false;
+  let gameScanned = false;
+  const controller = new RecoveryController({
+    store,
+    clock: () => new Date(2026, 9, 30, 15, 0),
+    inspectLimit: async () => {
+      inspected = true;
+      return { processRunning: false, blocked: null };
+    },
+    detectGame: async () => {
+      gameScanned = true;
+      return null;
+    }
+  });
+
+  await controller.tick('test');
+
+  assert.equal(inspected, false);
+  assert.equal(gameScanned, false);
+  assert.equal(store.snapshot().monitor.recoveryStatus, 'blocked_schedule');
+  assert.equal(store.snapshot().monitor.taskPending, true);
+});
+
+test('does not inspect or open Claude while SKLauncher is running', async () => {
+  const store = createStore({
+    taskPending: true,
+    gameProtectionEnabled: true
+  });
+  let inspected = false;
+  let opened = false;
+  const controller = new RecoveryController({
+    store,
+    clock: () => new Date(2026, 10, 1, 10, 0),
+    inspectLimit: async () => {
+      inspected = true;
+      return { processRunning: false, blocked: null };
+    },
+    detectGame: async () => ({
+      id: 'sklauncher',
+      name: 'SKLauncher',
+      processName: 'SKLauncher.exe'
+    }),
+    openConversation: async () => {
+      opened = true;
+    }
+  });
+
+  await controller.tick('test');
+
+  assert.equal(inspected, false);
+  assert.equal(opened, false);
+  assert.equal(store.snapshot().monitor.recoveryStatus, 'blocked_by_game');
+  assert.equal(store.snapshot().monitor.taskPending, true);
 });
