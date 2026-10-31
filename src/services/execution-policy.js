@@ -71,7 +71,7 @@ function identifyBlockingGame(processes = []) {
     const commandLine = String(processInfo?.commandLine || processInfo?.CommandLine || '');
 
     if (/^sk[\s_-]*launcher\.exe$/i.test(name)) {
-      return { id: 'ck-launcher', name: 'SKLauncher', processName: name };
+      return { id: 'sklauncher', name: 'SKLauncher', processName: name };
     }
     if (/^RobloxPlayerBeta\.exe$/i.test(name)) {
       return { id: 'roblox-player', name: 'Roblox Player', processName: name };
