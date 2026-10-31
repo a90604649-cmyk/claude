@@ -15,7 +15,7 @@ const {
 
 const { AppStore } = require('./services/store');
 const { MonitorScheduler } = require('./services/scheduler');
-const { activateClaudeMainWindow } = require('./services/claude-window');
+const { activateClaudeMainWindow, closeClaudeMainWindow } = require('./services/claude-window');
 const { RecoveryController } = require('./services/recovery-controller');
 const { extractConversationId, buildConversationDeepLink } = require('./services/conversation');
 const { inspectClaudeLimit } = require('./services/limit-detector');
@@ -446,6 +446,7 @@ if (hasSingleInstance) {
       inspectLimit: inspectClaudeLimit,
       openConversation: openSavedConversation,
       activateMainWindow: activateClaudeMainWindow,
+      closeMainWindow: closeClaudeMainWindow,
       sendMessage: sendContinuationMessage,
       onUpdate: () => {
         getDashboardSnapshot()
