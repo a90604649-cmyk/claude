@@ -210,10 +210,18 @@ function updateTrayMenu() {
     { type: 'separator' },
     {
       label: 'Salir',
-      click: () => {
+      click: async () => {
         isQuitting = true;
         scheduler?.dispose();
         recoveryController?.dispose();
+        try {
+          await removeRecoveryTask();
+          scheduledTaskArmed = false;
+        } catch (error) {
+          await store?.log('warning', 'No se pudo cancelar la comprobación programada al salir.', {
+            reason: error.message
+          });
+        }
         app.quit();
       }
     }
