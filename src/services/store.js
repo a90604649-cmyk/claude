@@ -8,7 +8,12 @@ const DEFAULT_DATA = Object.freeze({
     startWithWindows: false,
     startupPromptShown: false,
     monitoringEnabled: true,
-    checkIntervalMinutes: 5
+    checkIntervalMinutes: 5,
+    fallbackWaitMinutes: 300,
+    automationEnabled: false,
+    conversationId: null,
+    conversationVerified: false,
+    continuePrompt: 'Continúa con la tarea que quedó pendiente en esta misma conversación. Revisa el contexto anterior, conserva los avances y sigue desde el último punto completado. No comiences un chat nuevo.'
   },
   monitor: {
     lastCheckAt: null,
@@ -17,7 +22,17 @@ const DEFAULT_DATA = Object.freeze({
     claudeMainWindowStatus: 'unknown',
     claudeMainWindowTitle: null,
     lastMainWindowCheckAt: null,
-    quickEntryDetected: false
+    quickEntryDetected: false,
+    taskPending: false,
+    recoveryStatus: 'idle',
+    recoveryMessage: 'Configura la conversación original para activar la recuperación.',
+    limitDetectedAt: null,
+    limitResetAt: null,
+    nextEligibleAt: null,
+    lastRecoveryAttemptAt: null,
+    lastContinuationAt: null,
+    lastChatOpenedForVerificationAt: null,
+    continuationSentForLimit: false
   }
 });
 
