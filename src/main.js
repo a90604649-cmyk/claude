@@ -21,6 +21,7 @@ const { extractConversationId, buildConversationDeepLink } = require('./services
 const { inspectClaudeLimit } = require('./services/limit-detector');
 const { sendContinuationMessage } = require('./services/claude-input');
 const { sanitizeExecutionPolicySettings } = require('./services/execution-policy');
+const { removeRecoveryTask, scheduleRecoveryTask } = require('./services/windows-scheduler');
 const {
   setWindowsStartup,
   getWindowsStartupStatus
@@ -29,6 +30,7 @@ const {
 const APP_NAME = 'Claude AutoContinue';
 const isWindows = process.platform === 'win32';
 const startedAtLogin = process.argv.includes('--autostart');
+const startedByScheduledCheck = process.argv.includes('--scheduled-check');
 
 let mainWindow = null;
 let tray = null;
@@ -277,7 +279,7 @@ function registerIpcHandlers() {
   ipcMain.handle('app:set-interval', async (_event, minutes) => {
     const value = await scheduler.setIntervalMinutes(minutes);
     await store.log('info', `Intervalo de comprobación ajustado a ${value.settings.checkIntervalMinutes} minutos.`);
-    recoveryController?.schedule();
+    await recoveryController?.schedule();
     return getDashboardSnapshot();
   });
 
@@ -295,6 +297,7 @@ function registerIpcHandlers() {
     const value = allowed.includes(Number(minutes)) ? Number(minutes) : 302;
     await store.updateSettings({ fallbackWaitMinutes: value });
     await store.log('info', `Espera de respaldo ajustada a ${value} minutos.`);
+    await recoveryController?.schedule();
     return getDashboardSnapshot();
   });
 
@@ -434,6 +437,14 @@ if (hasSingleInstance) {
 
     store = new AppStore(app.getPath('userData'));
     await store.load();
+    if (startedByScheduledCheck) {
+      try {
+        await removeRecoveryTask();
+        await store.log('info', 'Se consumió la tarea programada de Windows.');
+      } catch (error) {
+        await store.log('warning', 'No se pudo retirar la tarea programada anterior.', { reason: error.message });
+      }
+    }
     await askAboutWindowsStartup();
 
     scheduler = new MonitorScheduler({
@@ -448,6 +459,11 @@ if (hasSingleInstance) {
       activateMainWindow: activateClaudeMainWindow,
       closeMainWindow: closeClaudeMainWindow,
       sendMessage: sendContinuationMessage,
+      scheduleWake: (dueAt) => scheduleRecoveryTask(app, dueAt),
+      onIdleWait: async () => {
+        isQuitting = true;
+        app.quit();
+      },
       onUpdate: () => {
         getDashboardSnapshot()
           .then(sendMonitorUpdate)
@@ -463,8 +479,8 @@ if (hasSingleInstance) {
       });
     });
     await scheduler.start();
-    createMainWindow({ hidden: startedAtLogin });
-    await recoveryController.start();
+    createMainWindow({ hidden: startedAtLogin || startedByScheduledCheck });
+    await recoveryController.start({ scheduledCheck: startedByScheduledCheck });
 
     app.on('activate', () => showMainWindow());
   }).catch((error) => {
