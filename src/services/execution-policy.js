@@ -70,8 +70,8 @@ function identifyBlockingGame(processes = []) {
     const name = String(processInfo?.name || processInfo?.Name || '').split(/[\\/]/).pop();
     const commandLine = String(processInfo?.commandLine || processInfo?.CommandLine || '');
 
-    if (/^ck[\s_-]*launcher\.exe$/i.test(name)) {
-      return { id: 'ck-launcher', name: 'CK Launcher', processName: name };
+    if (/^sk[\s_-]*launcher\.exe$/i.test(name)) {
+      return { id: 'ck-launcher', name: 'SKLauncher', processName: name };
     }
     if (/^RobloxPlayerBeta\.exe$/i.test(name)) {
       return { id: 'roblox-player', name: 'Roblox Player', processName: name };
@@ -94,7 +94,7 @@ $ErrorActionPreference = 'Stop'
 $processes = @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop | Where-Object {
   $name = [string]$_.Name
   $line = [string]$_.CommandLine
-  ($name -match '^(?i)ck[\s_-]*launcher\.exe$') -or
+  ($name -match '^(?i)sk[\s_-]*launcher\.exe$') -or
   ($name -match '^(?i)RobloxPlayerBeta\.exe$') -or
   ($name -match '^(?i)Minecraft(\.Windows)?\.exe$') -or
   (($name -match '^(?i)javaw?\.exe$') -and ($line -match '(?i)net\.minecraft|minecraft.*client|org\.lwjgl'))
