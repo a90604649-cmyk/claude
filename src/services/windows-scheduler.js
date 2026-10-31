@@ -57,8 +57,8 @@ function buildRemoveTaskScript() {
   return String.raw`
 $ErrorActionPreference = 'SilentlyContinue'
 Unregister-ScheduledTask -TaskName '${TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
-'RE,'
-`.replace("'RE,'", "'REMOVED'");
+'REMOVED'
+`;
 }
 
 async function runPowerShell(script) {
