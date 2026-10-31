@@ -95,6 +95,7 @@ class RecoveryController {
       this.pollTimer = setInterval(() => {
         this.tick('detección de límite').catch(() => {});
       }, this.intervalMs());
+      this.pollTimer.unref?.();
     };
 
     if (initialDelayMs > 0) {
