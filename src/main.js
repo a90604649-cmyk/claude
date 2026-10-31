@@ -279,6 +279,15 @@ function registerIpcHandlers() {
     return getDashboardSnapshot();
   });
 
+  ipcMain.handle('app:set-recovery-interval', async (_event, minutes) => {
+    const allowed = [1, 2, 5, 10];
+    const value = allowed.includes(Number(minutes)) ? Number(minutes) : 1;
+    await store.updateSettings({ recoveryCheckIntervalMinutes: value });
+    await recoveryController.schedule();
+    await store.log('info', `Frecuencia de detección de límite ajustada a ${value} minutos.`);
+    return getDashboardSnapshot();
+  });
+
   ipcMain.handle('app:set-fallback-wait', async (_event, minutes) => {
     const allowed = [300, 360, 480];
     const value = allowed.includes(Number(minutes)) ? Number(minutes) : 300;
