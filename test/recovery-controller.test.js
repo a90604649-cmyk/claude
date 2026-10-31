@@ -367,3 +367,50 @@ test('hands long waits to Windows Task Scheduler and requests app exit', async (
   assert.equal(store.snapshot().monitor.taskPending, true);
   controller.dispose();
 });
+
+
+test('waits for a game exit event and resumes immediately without a polling delay', async () => {
+  const due = new Date(Date.now() - 1000).toISOString();
+  const store = createStore({
+    taskPending: true,
+    nextEligibleAt: due,
+    gameProtectionEnabled: true
+  });
+  let inspectCalls = 0;
+  let watcherStarted = false;
+  let appExitRequested = false;
+  let opened = false;
+
+  const controller = new RecoveryController({
+    store,
+    inspectLimit: async () => {
+      inspectCalls += 1;
+      return { processRunning: false, blocked: null };
+    },
+    detectGame: async () => ({
+      id: 'roblox-player',
+      name: 'Roblox Player',
+      processName: 'RobloxPlayerBeta.exe'
+    }),
+    waitForGamesToClose: async () => {
+      watcherStarted = true;
+      return { started: true };
+    },
+    onIdleWait: async () => {
+      appExitRequested = true;
+    },
+    openConversation: async () => {
+      opened = true;
+    }
+  });
+
+  await controller.tick('test');
+
+  assert.equal(watcherStarted, true);
+  assert.equal(appExitRequested, true);
+  assert.equal(inspectCalls, 0);
+  assert.equal(opened, false);
+  assert.equal(store.snapshot().monitor.taskPending, true);
+  assert.equal(store.snapshot().monitor.recoveryStatus, 'blocked_by_game');
+  controller.dispose();
+});
