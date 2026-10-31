@@ -28,8 +28,8 @@ class RecoveryController {
   }
 
   intervalMs() {
-    const minutes = Number(this.store.snapshot().settings.checkIntervalMinutes) || 5;
-    return Math.max(1, Math.min(minutes, 60)) * 60 * 1000;
+    const minutes = Number(this.store.snapshot().settings.recoveryCheckIntervalMinutes) || 1;
+    return Math.max(1, Math.min(minutes, 15)) * 60 * 1000;
   }
 
   async start() {
