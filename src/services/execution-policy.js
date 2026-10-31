@@ -32,10 +32,14 @@ function sanitizeExecutionPolicySettings(input = {}, current = DEFAULT_POLICY) {
       : Boolean(input.gameProtectionEnabled)
   };
 
+  const isValidClock = (value) => {
+    const match = String(value).match(/^(\d{2}):(\d{2})$/);
+    return Boolean(match && Number(match[1]) <= 23 && Number(match[2]) <= 59);
+  };
   const start = parseClock(next.schoolStartTime, DEFAULT_POLICY.schoolStartTime);
   const end = parseClock(next.schoolEndTime, DEFAULT_POLICY.schoolEndTime);
-  if (!/^\d{2}:\d{2}$/.test(next.schoolStartTime)
-      || !/^\d{2}:\d{2}$/.test(next.schoolEndTime)
+  if (!isValidClock(next.schoolStartTime)
+      || !isValidClock(next.schoolEndTime)
       || start >= end) {
     throw new Error('El horario escolar debe tener horas válidas y la hora de inicio debe ser anterior a la hora final.');
   }
