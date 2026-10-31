@@ -42,7 +42,7 @@ function Test-BlockingGame {
 # Subscribe before checking current processes to avoid a close-event race.
 $queryText = "SELECT * FROM Win32_ProcessStopTrace WHERE ProcessName='SKLauncher.exe' OR ProcessName='RobloxPlayerBeta.exe' OR ProcessName='Minecraft.exe' OR ProcessName='Minecraft.Windows.exe' OR ProcessName='java.exe' OR ProcessName='javaw.exe'"
 $watcher = New-Object System.Management.ManagementEventWatcher
-$watcher.Query = New-Object System.Management.WqlEventQuery($queryText)
+$watcher.Query = [System.Management.WqlEventQuery]::new($queryText)
 $watcher.Options.Timeout = [TimeSpan]::FromDays(1)
 $watcher.Start()
 
@@ -67,7 +67,7 @@ finally {
 `;
 }
 
-function startGameExitWatcher(app) {
+async function startGameExitWatcher(app) {
   if (process.platform !== 'win32') {
     return { supported: false, started: false, message: 'La espera por eventos de proceso está disponible en Windows.' };
   }
@@ -86,19 +86,24 @@ function startGameExitWatcher(app) {
     workingDirectory
   });
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
-  const child = spawn(
-    'powershell.exe',
-    ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
-    {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true
-    }
-  );
 
-  child.once('error', () => {});
-  child.unref();
-  return { supported: true, started: true, pid: child.pid || null };
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'powershell.exe',
+      ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
+      {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    );
+
+    child.once('error', reject);
+    child.once('spawn', () => {
+      child.unref();
+      resolve({ supported: true, started: true, pid: child.pid || null });
+    });
+  });
 }
 
 module.exports = {
