@@ -291,8 +291,8 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('app:set-fallback-wait', async (_event, minutes) => {
-    const allowed = [300, 360, 480];
-    const value = allowed.includes(Number(minutes)) ? Number(minutes) : 300;
+    const allowed = [300, 302];
+    const value = allowed.includes(Number(minutes)) ? Number(minutes) : 302;
     await store.updateSettings({ fallbackWaitMinutes: value });
     await store.log('info', `Espera de respaldo ajustada a ${value} minutos.`);
     return getDashboardSnapshot();
