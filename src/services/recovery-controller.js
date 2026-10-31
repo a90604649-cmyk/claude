@@ -18,6 +18,8 @@ class RecoveryController {
     activateMainWindow,
     sendMessage,
     closeMainWindow = async () => ({ closed: false }),
+    scheduleWake = async () => ({ scheduled: false }),
+    onIdleWait = null,
     onUpdate,
     delay = wait,
     detectGame = detectBlockingGame,
@@ -29,6 +31,8 @@ class RecoveryController {
     this.activateMainWindow = activateMainWindow;
     this.sendMessage = sendMessage;
     this.closeMainWindow = closeMainWindow;
+    this.scheduleWake = scheduleWake;
+    this.onIdleWait = onIdleWait;
     this.onUpdate = onUpdate;
     this.delay = delay;
     this.detectGame = detectGame;
@@ -44,7 +48,7 @@ class RecoveryController {
     return Math.max(1, Math.min(minutes, 15)) * 60 * 1000;
   }
 
-  async start() {
+  async start({ scheduledCheck = false } = {}) {
     const snapshot = this.store.snapshot();
 
     if (snapshot.monitor.recoveryStatus === 'sending') {
@@ -57,17 +61,23 @@ class RecoveryController {
 
     if (!snapshot.settings.automationEnabled) return;
 
-    await this.store.log('info', 'AutoContinue inició en segundo plano. Esperará 1 minuto antes de su primera evaluación.');
-    this.schedule({ initialDelayMs: 60_000, source: 'inicio de Windows' });
+    const initialDelayMs = scheduledCheck ? 0 : 60_000;
+    await this.store.log('info', scheduledCheck
+      ? 'Windows inició la comprobación programada.'
+      : 'AutoContinue inició en segundo plano. Programará una evaluación dentro de 1 minuto.');
+    await this.schedule({
+      initialDelayMs,
+      source: scheduledCheck ? 'comprobación programada de Windows' : 'inicio de Windows'
+    });
   }
 
-  schedule({ initialDelayMs = 0, source = 'automático' } = {}) {
+  async schedule({ initialDelayMs = 0, source = 'automático' } = {}) {
     this.stopTimers();
     const snapshot = this.store.snapshot();
     if (!snapshot.settings.automationEnabled) return;
 
     if (snapshot.monitor.taskPending === true) {
-      this.schedulePendingCheck({ minimumDelayMs: initialDelayMs, source });
+      await this.schedulePendingCheck({ minimumDelayMs: initialDelayMs, source });
       return;
     }
 
@@ -81,6 +91,7 @@ class RecoveryController {
 
     if (initialDelayMs > 0) {
       this.startupTimer = setTimeout(beginPolling, initialDelayMs);
+      this.startupTimer.unref?.();
     } else {
       beginPolling();
     }
@@ -101,7 +112,7 @@ class RecoveryController {
     }
   }
 
-  schedulePendingCheck({ minimumDelayMs = 0, source = 'hora programada' } = {}) {
+  async schedulePendingCheck({ minimumDelayMs = 0, source = 'hora programada' } = {}) {
     if (this.dueTimer) {
       clearTimeout(this.dueTimer);
       this.dueTimer = null;
@@ -118,14 +129,37 @@ class RecoveryController {
 
     const state = this.store.snapshot().monitor;
     if (state.taskPending !== true) {
-      this.schedule();
+      await this.schedule();
       return;
     }
 
     const dueAt = state.nextEligibleAt ? Date.parse(state.nextEligibleAt) : this.clock().getTime();
     const remaining = Number.isFinite(dueAt) ? Math.max(0, dueAt - this.clock().getTime()) : 0;
     const waitMs = Math.max(remaining, Math.max(0, minimumDelayMs));
+    const actualDueAt = new Date(this.clock().getTime() + waitMs);
 
+    // A Windows one-shot task allows Electron to exit entirely during long waits.
+    if (waitMs > 1000) {
+      try {
+        const scheduled = await this.scheduleWake(actualDueAt);
+        if (scheduled?.scheduled === true) {
+          await this.store.log('info', 'Windows programó el siguiente intento. AutoContinue se cerrará para no ocupar memoria durante la espera.', {
+            dueAt: actualDueAt.toISOString(),
+            taskName: scheduled.taskName || null
+          });
+          this.emitUpdate();
+          if (this.onIdleWait) await this.onIdleWait({ dueAt: actualDueAt, source });
+          return;
+        }
+      } catch (error) {
+        await this.store.log('warning', 'No se pudo crear la tarea de Windows; AutoContinue esperará con un temporizador local.', {
+          reason: error.message,
+          dueAt: actualDueAt.toISOString()
+        });
+      }
+    }
+
+    // Fallback only: no repeated polling, just one local timer if Task Scheduler is unavailable.
     this.dueTimer = setTimeout(() => {
       this.dueTimer = null;
       this.tick(source).catch(() => {});
@@ -136,7 +170,7 @@ class RecoveryController {
   async onSystemResume() {
     if (!this.store.snapshot().settings.automationEnabled) return;
     await this.store.log('info', 'Windows salió de suspensión. Se evaluarán las reglas dentro de 1 minuto.');
-    this.schedule({ initialDelayMs: 60_000, source: 'reactivación de Windows' });
+    await this.schedule({ initialDelayMs: 60_000, source: 'reactivación de Windows' });
   }
 
   async configure(enabled) {
@@ -151,8 +185,12 @@ class RecoveryController {
       : 'AutoContinue automático pausado.');
 
     if (enabled) {
-      this.schedule();
-      await this.tick('activación');
+      if (this.store.snapshot().monitor.taskPending === true) {
+        await this.schedule();
+      } else {
+        await this.tick('activación');
+        if (!this.store.snapshot().monitor.taskPending) await this.schedule();
+      }
     } else {
       this.stopTimers();
     }
@@ -190,7 +228,9 @@ class RecoveryController {
       nextCheckAt: dueAt.toISOString()
     });
     this.emitUpdate();
-    this.schedulePendingCheck({ source: status === 'blocked_by_game' ? 'revisión de juego' : 'fin del horario bloqueado' });
+    await this.schedulePendingCheck({
+      source: status === 'blocked_by_game' ? 'revisión de juego' : 'fin del horario bloqueado'
+    });
   }
 
   async tick(source = 'manual') {
@@ -222,7 +262,7 @@ class RecoveryController {
             'waiting_limit',
             `Claude permanece cerrado. Próxima comprobación programada para ${new Date(nextCheck).toLocaleString()}.`
           );
-          this.schedulePendingCheck({ source: 'hora de restablecimiento' });
+          await this.schedulePendingCheck({ source: 'hora de restablecimiento' });
           return this.store.snapshot();
         }
 
@@ -265,9 +305,12 @@ class RecoveryController {
       }
 
       if (inspection.processRunning === null) {
-        await this.setStatus('inspection_unavailable', inspection.message || 'No se pudo inspeccionar Claude. No se enviará nada.');
+        const message = inspection.message || 'No se pudo inspeccionar Claude. No se enviará nada.';
+        await this.setStatus('inspection_unavailable', message);
         if (state.monitor.taskPending) {
-          await this.deferPending('inspection_unavailable', inspection.message || 'No se pudo inspeccionar Claude. Se reintentará en 2 minutos.', new Date(this.clock().getTime() + BLOCKED_RETRY_MS), { reason: 'inspection_unavailable' });
+          await this.deferPending('inspection_unavailable', message, new Date(this.clock().getTime() + BLOCKED_RETRY_MS), {
+            reason: 'inspection_unavailable'
+          });
         }
         return this.store.snapshot();
       }
@@ -279,11 +322,11 @@ class RecoveryController {
         return this.store.snapshot();
       }
 
-      // The five-hour wait has expired and local rules allow a check. Open Claude only now.
+      // The wait is over and local rules allow a single check. Open Claude only now.
       let openedByController = false;
       let conversationAlreadyOpened = false;
       if (inspection.processRunning === false || inspection.mainWindowFound !== true) {
-        await this.setStatus('opening_claude', 'Terminó la espera. Abriendo Claude para comprobar el límite una sola vez.');
+        await this.setStatus('opening_claude', 'Terminó la espera. Abriendo Claude para comprobar el límite.');
         openedByController = inspection.processRunning === false;
         await this.openConversation(conversationId);
         conversationAlreadyOpened = true;
@@ -291,25 +334,21 @@ class RecoveryController {
       }
 
       if (inspection.blocked === true) {
-        if (openedByController) {
-          await this.closeMainWindow().catch(() => {});
-        }
+        if (openedByController) await this.closeMainWindow().catch(() => {});
         await this.recordLimit(inspection);
         return this.store.snapshot();
       }
 
       if (inspection.blocked !== false) {
-        if (openedByController) {
-          await this.closeMainWindow().catch(() => {});
-        }
-        const message = inspection.message || 'No se pudo confirmar si el límite desapareció. No se enviará nada; se reintentará en 2 minutos.';
+        if (openedByController) await this.closeMainWindow().catch(() => {});
+        const message = inspection.message || 'No se pudo confirmar si el límite desapareció. Se reintentará en 2 minutos.';
         await this.deferPending('inspection_unavailable', message, new Date(this.clock().getTime() + BLOCKED_RETRY_MS), {
           reason: 'inspection_unavailable'
         });
         return this.store.snapshot();
       }
 
-      // Re-check the protected applications immediately before opening/focusing the saved chat.
+      // Re-check protected applications immediately before taking focus.
       if (state.settings.gameProtectionEnabled !== false) {
         const game = await this.detectGame();
         if (game) {
@@ -388,7 +427,7 @@ class RecoveryController {
       });
       await this.store.log('info', 'Se envió una continuación a la conversación original.', { source });
       this.emitUpdate();
-      this.schedule();
+      await this.schedule();
       return this.store.snapshot();
     } catch (error) {
       await this.setStatus('error', error.message);
@@ -446,7 +485,7 @@ class RecoveryController {
     });
 
     if (!isRetry || current.recoveryStatus !== 'waiting_limit') {
-      await this.store.log(isRetry ? 'warning' : 'warning', isRetry
+      await this.store.log('warning', isRetry
         ? 'El límite continúa activo después de la comprobación programada.'
         : 'Claude alcanzó un límite. Se guardó la hora exacta y se programó una única comprobación futura.', {
         detectedAt,
@@ -457,7 +496,7 @@ class RecoveryController {
     }
 
     this.emitUpdate();
-    this.schedulePendingCheck();
+    await this.schedulePendingCheck();
   }
 
   async setStatus(status, message) {
