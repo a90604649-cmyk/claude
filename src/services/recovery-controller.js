@@ -145,6 +145,30 @@ class RecoveryController {
     this.running = true;
     try {
       let state = this.store.snapshot();
+
+      // Once a task is pending, apply local quiet-hours/game rules before launching
+      // PowerShell or inspecting Claude. This avoids unnecessary work and interruptions.
+      if (state.monitor.taskPending === true) {
+        const schoolBlock = getSchoolScheduleBlock(this.clock(), state.settings);
+        if (schoolBlock) {
+          await this.applyExecutionBlock(schoolBlock);
+          return this.store.snapshot();
+        }
+
+        if (state.settings.gameProtectionEnabled !== false) {
+          const activeGame = await this.detectGame();
+          if (activeGame) {
+            await this.applyExecutionBlock({
+              status: 'blocked_by_game',
+              reason: 'game_active',
+              processName: activeGame.processName,
+              message: `No se ejecutó: ${activeGame.name} está abierto. AutoContinue esperará a que cierres el juego.`
+            });
+            return this.store.snapshot();
+          }
+        }
+      }
+
       const inspection = await this.inspectLimit();
 
       // Always record an active limit as soon as it is visible, even during class hours or a game.
@@ -165,13 +189,6 @@ class RecoveryController {
         return this.store.snapshot();
       }
 
-      // School hours take priority over every other rule. No chat is opened during this block.
-      const schoolBlock = getSchoolScheduleBlock(this.clock(), state.settings);
-      if (schoolBlock) {
-        await this.applyExecutionBlock(schoolBlock);
-        return this.store.snapshot();
-      }
-
       const now = this.clock().getTime();
       const eligibleAt = state.monitor.nextEligibleAt
         ? Date.parse(state.monitor.nextEligibleAt)
@@ -184,20 +201,6 @@ class RecoveryController {
           `Claude está cerrado. Próxima evaluación después de ${new Date(eligibleAt).toLocaleString()}.`
         );
         return this.store.snapshot();
-      }
-
-      // Only inspect game processes when a continuation could actually be attempted.
-      if (state.settings.gameProtectionEnabled !== false) {
-        const game = await this.detectGame();
-        if (game) {
-          await this.applyExecutionBlock({
-            status: 'blocked_by_game',
-            reason: 'game_active',
-            processName: game.processName,
-            message: `No se ejecutó: ${game.name} está abierto. AutoContinue esperará a que cierres el juego.`
-          });
-          return this.store.snapshot();
-        }
       }
 
       let readyInspection = inspection;
