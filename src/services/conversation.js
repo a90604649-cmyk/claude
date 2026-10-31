@@ -1,8 +1,7 @@
 'use strict';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const DEFAULT_CONTINUE_PROMPT =
-  'Continúa con la tarea que quedó pendiente en esta misma conversación. Revisa el contexto anterior, conserva los avances y sigue desde el último punto completado. No comiences un chat nuevo.';
+const DEFAULT_CONTINUE_PROMPT = 'Continúa.';
 
 function extractConversationId(input) {
   const value = String(input || '').trim();
