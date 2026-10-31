@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;">
+  <title>Claude AutoContinue</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><span></span></div>
+        <div>
+          <div class="brand-name">Claude AutoContinue</div>
+          <div class="brand-subtitle">Beta 1 · Panel de control</div>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <span class="version" id="version">V1.0.0</span>
+        <span class="status-pill" id="app-status"><i></i> Iniciando</span>
+      </div>
+    </header>
+
+    <section class="intro">
+      <div>
+        <p class="eyebrow">CENTRO DE CONTROL</p>
+        <h1>Tu automatización,<br><span>bajo control.</span></h1>
+        <p class="intro-copy">AutoContinue permanece en segundo plano, recuerda tus preferencias y revisa si Claude Desktop está abierto.</p>
+      </div>
+      <div class="intro-orbit" aria-hidden="true">
+        <div class="orbit orbit-one"></div>
+        <div class="orbit orbit-two"></div>
+        <div class="orbit-core"><span></span></div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card primary-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">ESTADO DE CLAUDE</p>
+            <h2>Claude Desktop</h2>
+          </div>
+          <span class="state-icon" id="claude-icon">?</span>
+        </div>
+        <div class="large-status" id="claude-status">Sin comprobar</div>
+        <p class="muted" id="claude-detail">Pulsa comprobar para revisar si el proceso está abierto.</p>
+        <div class="card-footer">
+          <span class="small-note" id="last-check">Última revisión: todavía no hay datos</span>
+          <button class="button button-primary" id="check-now">Comprobar ahora</button>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">VIGILANCIA</p>
+            <h2>Revisión automática</h2>
+          </div>
+          <span class="mini-symbol">↻</span>
+        </div>
+        <p class="muted">Comprueba periódicamente si Claude Desktop está ejecutándose. No envía mensajes.</p>
+        <label class="switch-row" for="monitoring-toggle">
+          <span>
+            <strong>Vigilar Claude</strong>
+            <small>Seguir revisando en segundo plano</small>
+          </span>
+          <input class="switch" type="checkbox" id="monitoring-toggle">
+        </label>
+        <div class="setting-line">
+          <label for="interval">Revisar cada</label>
+          <select id="interval">
+            <option value="1">1 minuto</option>
+            <option value="3">3 minutos</option>
+            <option value="5">5 minutos</option>
+            <option value="10">10 minutos</option>
+            <option value="15">15 minutos</option>
+            <option value="30">30 minutos</option>
+            <option value="60">60 minutos</option>
+          </select>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">WINDOWS</p>
+            <h2>Inicio automático</h2>
+          </div>
+          <span class="mini-symbol">⌁</span>
+        </div>
+        <p class="muted">Permite que AutoContinue se inicie al entrar a tu sesión de Windows.</p>
+        <label class="switch-row" for="startup-toggle">
+          <span>
+            <strong>Iniciar con Windows</strong>
+            <small>Arrancar en segundo plano al encender el PC</small>
+          </span>
+          <input class="switch" type="checkbox" id="startup-toggle">
+        </label>
+        <p class="hint" id="startup-hint">Puedes cambiar esta opción cuando quieras.</p>
+      </article>
+
+      <article class="card limit-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">SIGUIENTE ETAPA</p>
+            <h2>Detección del límite</h2>
+          </div>
+          <span class="planned-tag">Pendiente</span>
+        </div>
+        <p class="muted">La Beta 1 todavía no interpreta el aviso de límite de Claude. Esta función se añadirá en una etapa posterior.</p>
+        <div class="feature-line"><span class="feature-dot"></span> No intenta enviar mensajes de prueba</div>
+        <div class="feature-line"><span class="feature-dot"></span> No intenta evitar ni saltarse límites</div>
+      </article>
+    </section>
+
+    <section class="bottom-grid">
+      <article class="card activity-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">REGISTRO LOCAL</p>
+            <h2>Actividad reciente</h2>
+          </div>
+          <span class="mini-symbol">≡</span>
+        </div>
+        <div class="log-list" id="log-list">
+          <p class="empty-state">Todavía no hay actividad registrada.</p>
+        </div>
+      </article>
+
+      <aside class="notice">
+        <div class="notice-mark">i</div>
+        <div>
+          <strong>Qué incluye esta beta</strong>
+          <p>Esta versión guarda tus ajustes, puede iniciar con Windows, permanece en la bandeja y revisa si Claude Desktop está abierto. La detección visual del límite y la continuación de tareas aún no están implementadas.</p>
+        </div>
+      </aside>
+    </section>
+
+    <footer>
+      <span>Claude AutoContinue · Proyecto personal</span>
+      <span id="platform-note">Preparado para Windows</span>
+    </footer>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
