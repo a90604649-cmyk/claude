@@ -276,7 +276,7 @@ async function getClaudeWindowSnapshot() {
 
 
 function buildCloseScript(handle) {
-  if (!/^\\d+$/.test(String(handle))) {
+  if (!/^\d+$/.test(String(handle))) {
     throw new Error('Identificador de ventana no válido.');
   }
 
