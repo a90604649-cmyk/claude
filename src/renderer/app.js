@@ -22,6 +22,7 @@ const elements = {
   recoveryStatus: $('recovery-status'),
   recoveryDetail: $('recovery-detail'),
   fallbackWait: $('fallback-wait'),
+  recoveryInterval: $('recovery-interval'),
   recoveryCheck: $('recovery-check'),
   lastCheck: $('last-check'),
   checkNow: $('check-now'),
@@ -170,6 +171,7 @@ function renderSnapshot(snapshot) {
   elements.automationToggle.checked = Boolean(settings.automationEnabled);
   elements.automationToggle.disabled = !settings.conversationId || !settings.conversationVerified;
   elements.fallbackWait.value = String(settings.fallbackWaitMinutes || 300);
+  elements.recoveryInterval.value = String(settings.recoveryCheckIntervalMinutes || 1);
 
   if (!settings.conversationId) {
     elements.conversationStatus.textContent = 'Todavía no hay una conversación guardada.';
@@ -287,6 +289,16 @@ elements.automationToggle.addEventListener('change', async () => {
     showToast(error.message || 'No se pudo cambiar AutoContinue.');
     const snapshot = await window.autoContinue.getSnapshot();
     renderSnapshot(snapshot);
+  }
+});
+
+elements.recoveryInterval.addEventListener('change', async () => {
+  try {
+    const snapshot = await window.autoContinue.setRecoveryInterval(Number(elements.recoveryInterval.value));
+    renderSnapshot(snapshot);
+    showToast('Frecuencia de detección actualizada.');
+  } catch (error) {
+    showToast(error.message || 'No se pudo cambiar la frecuencia.');
   }
 });
 
