@@ -13,6 +13,7 @@ const {
 
 const { AppStore } = require('./services/store');
 const { MonitorScheduler } = require('./services/scheduler');
+const { activateClaudeMainWindow } = require('./services/claude-window');
 const {
   setWindowsStartup,
   getWindowsStartupStatus
@@ -49,6 +50,39 @@ function showMainWindow() {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+}
+
+async function activateClaudeMainFromUi(source = 'panel') {
+  const result = await activateClaudeMainWindow();
+  const checkedAt = new Date().toISOString();
+
+  await store.updateMonitor({
+    claudeMainWindowStatus: result.status,
+    claudeMainWindowTitle: result.window?.title || null,
+    lastMainWindowCheckAt: checkedAt,
+    quickEntryDetected: Boolean(result.quickEntryDetected)
+  });
+
+  const level = result.status === 'focused'
+    ? 'info'
+    : result.status === 'error'
+      ? 'error'
+      : 'warning';
+
+  await store.log(level, result.message, {
+    source,
+    status: result.status,
+    window: result.window || null
+  });
+
+  const payload = {
+    ...store.snapshot(),
+    mainWindowResult: result,
+    logs: await store.readRecentLogs(25)
+  };
+
+  sendMonitorUpdate(payload);
+  return payload;
 }
 
 function createMainWindow({ hidden = false } = {}) {
@@ -106,6 +140,16 @@ function updateTrayMenu() {
     {
       label: 'Comprobar Claude ahora',
       click: () => scheduler?.checkNow('menú de bandeja')
+    },
+    {
+      label: 'Activar chat principal de Claude',
+      click: () => {
+        activateClaudeMainFromUi('menú de bandeja').catch((error) => {
+          store?.log('error', 'No se pudo activar el chat principal de Claude.', {
+            reason: error.message
+          });
+        });
+      }
     },
     { type: 'separator' },
     {
@@ -222,6 +266,10 @@ function registerIpcHandlers() {
       ...result,
       logs: await store.readRecentLogs(25)
     };
+  });
+
+  ipcMain.handle('app:activate-claude-main', async () => {
+    return activateClaudeMainFromUi('panel');
   });
 }
 
