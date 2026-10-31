@@ -2,6 +2,7 @@
 
 const fs = require('node:fs/promises');
 const path = require('node:path');
+const { DEFAULT_CONTINUE_PROMPT } = require('./conversation');
 
 const DEFAULT_DATA = Object.freeze({
   settings: {
@@ -18,7 +19,7 @@ const DEFAULT_DATA = Object.freeze({
     automationEnabled: false,
     conversationId: null,
     conversationVerified: false,
-    continuePrompt: 'Continúa con la tarea que quedó pendiente en esta misma conversación. Revisa el contexto anterior, conserva los avances y sigue desde el último punto completado. No comiences un chat nuevo.'
+    continuePrompt: DEFAULT_CONTINUE_PROMPT
   },
   monitor: {
     lastCheckAt: null,
@@ -59,8 +60,14 @@ class AppStore {
     try {
       const raw = await fs.readFile(this.filePath, 'utf8');
       const parsed = JSON.parse(raw);
+      const loadedSettings = { ...DEFAULT_DATA.settings, ...(parsed.settings || {}) };
+      const previousDefaultPrompt = 'Continúa con la tarea que quedó pendiente en esta misma conversación. Revisa el contexto anterior, conserva los avances y sigue desde el último punto completado. No comiences un chat nuevo.';
+      if (loadedSettings.continuePrompt === previousDefaultPrompt) {
+        loadedSettings.continuePrompt = DEFAULT_CONTINUE_PROMPT;
+      }
+
       this.data = {
-        settings: { ...DEFAULT_DATA.settings, ...(parsed.settings || {}) },
+        settings: loadedSettings,
         monitor: { ...DEFAULT_DATA.monitor, ...(parsed.monitor || {}) }
       };
     } catch (error) {
