@@ -37,6 +37,17 @@ test('detects Spanish limit wording and a 24-hour reset time', () => {
   assert.equal(result.resetAt, new Date(2026, 9, 30, 17, 40, 0).toISOString());
 });
 
+test('detects the Spanish free-message notice and its a.m. reset time', () => {
+  const now = new Date(2026, 9, 31, 0, 24, 0);
+  const result = parseUsageLimitText(
+    'Te quedaste sin mensajes gratuitos hasta 1:40 a.m.',
+    now
+  );
+
+  assert.equal(result.blocked, true);
+  assert.equal(result.resetAt, new Date(2026, 9, 31, 1, 40, 0).toISOString());
+});
+
 test('rolls a reset time forward to tomorrow when it has already passed', () => {
   const now = new Date(2026, 9, 30, 18, 0, 0);
   const reset = parseResetTime('Resets at 5:40 PM', now);
