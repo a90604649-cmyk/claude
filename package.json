@@ -1,0 +1,49 @@
+{
+  "name": "claude-autocontinue",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/main.js",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "electron .",
+    "dist": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable",
+    "pack": "electron-builder --dir"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.1"
+  },
+  "build": {
+    "appId": "local.claudeautocontinue.app",
+    "productName": "Claude AutoContinue",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "Claude-AutoContinue-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
