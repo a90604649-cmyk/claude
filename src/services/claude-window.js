@@ -155,7 +155,7 @@ public static class AutoContinueWindowNative {
         $height = $rect.Bottom - $rect.Top
 
         if ($width -gt 0 -and $height -gt 0) {
-          $titleBuilder = New-Object System.Text.StringBuilder(512)
+          $titleBuilder = [System.Text.StringBuilder]::new(512)
           [void][AutoContinueWindowNative]::GetWindowText($handle, $titleBuilder, $titleBuilder.Capacity)
 
           $extendedStyle = [AutoContinueWindowNative]::GetWindowLong($handle, -20)
