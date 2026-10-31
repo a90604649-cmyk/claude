@@ -150,8 +150,28 @@ footer { padding: 18px 2px 0; color: #697691; font-size: 9px; }
 }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
+.automation-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; margin-top: 14px; }
+.field-label { display: block; margin: 19px 0 7px; color: #aeb8cd; font-size: 10px; font-weight: 650; }
+.text-input {
+  display: block; width: 100%; color: #eef2ff; background: #0f172a;
+  border: 1px solid #34415b; border-radius: 8px; padding: 11px 12px;
+  font: 11px "Segoe UI", Arial, sans-serif; outline: none;
+}
+.text-input:focus { border-color: #847cff; box-shadow: 0 0 0 3px rgba(132,124,255,.12); }
+.text-input::placeholder { color: #63708b; }
+.action-row { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 13px; }
+.button-secondary { color: #d7def0; background: #26334d; border: 1px solid #374765; font-size: 11px; font-weight: 650; }
+.confirm-row { display: flex; align-items: flex-start; gap: 8px; margin-top: 16px; color: #aeb8cd; font-size: 10px; line-height: 1.5; cursor: pointer; }
+.confirm-row input { accent-color: #756ef0; margin: 1px 0 0; }
+.confirm-row input:disabled { cursor: not-allowed; }
+.recovery-status { font-size: 21px; margin-top: 18px; }
+.recovery-card .switch-row { margin-top: 18px; }
+.recovery-card .setting-line { align-items: flex-start; gap: 10px; }
+.recovery-card .setting-line label { max-width: 62%; line-height: 1.5; }
+.recovery-card .hint { line-height: 1.55; }
+
 @media (max-width: 900px) {
   .shell { width: calc(100% - 36px); }
   .intro-orbit { margin-right: 10px; transform: scale(.82); }
-  .bottom-grid { grid-template-columns: 1fr; }
+  .bottom-grid, .automation-grid { grid-template-columns: 1fr; }
 }
