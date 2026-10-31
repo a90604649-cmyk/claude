@@ -19,6 +19,7 @@ class RecoveryController {
     sendMessage,
     closeMainWindow = async () => ({ closed: false }),
     scheduleWake = async () => ({ scheduled: false }),
+    cancelWake = async () => ({ removed: false }),
     onIdleWait = null,
     onUpdate,
     delay = wait,
@@ -32,6 +33,7 @@ class RecoveryController {
     this.sendMessage = sendMessage;
     this.closeMainWindow = closeMainWindow;
     this.scheduleWake = scheduleWake;
+    this.cancelWake = cancelWake;
     this.onIdleWait = onIdleWait;
     this.onUpdate = onUpdate;
     this.delay = delay;
@@ -79,6 +81,12 @@ class RecoveryController {
     if (snapshot.monitor.taskPending === true) {
       await this.schedulePendingCheck({ minimumDelayMs: initialDelayMs, source });
       return;
+    }
+
+    try {
+      await this.cancelWake();
+    } catch (error) {
+      await this.store.log('warning', 'No se pudo retirar una tarea de recuperación anterior.', { reason: error.message });
     }
 
     const beginPolling = () => {
@@ -193,6 +201,11 @@ class RecoveryController {
       }
     } else {
       this.stopTimers();
+      try {
+        await this.cancelWake();
+      } catch (error) {
+        await this.store.log('warning', 'No se pudo cancelar la tarea programada de Windows.', { reason: error.message });
+      }
     }
 
     return this.store.snapshot();
