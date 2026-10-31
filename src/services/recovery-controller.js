@@ -207,6 +207,8 @@ class RecoveryController {
       await this.store.updateMonitor({
         recoveryStatus: 'continued',
         taskPending: false,
+        limitDetectedAt: null,
+        limitResetAt: null,
         lastContinuationAt: new Date().toISOString(),
         nextEligibleAt: null,
         recoveryMessage: 'La continuación fue enviada a la conversación original.',
