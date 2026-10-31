@@ -173,6 +173,15 @@
           <input class="switch" type="checkbox" id="automation-toggle" disabled>
         </label>
         <div class="setting-line">
+          <label for="recovery-interval">Comprobar el límite cada</label>
+          <select id="recovery-interval">
+            <option value="1">1 minuto</option>
+            <option value="2">2 minutos</option>
+            <option value="5">5 minutos</option>
+            <option value="10">10 minutos</option>
+          </select>
+        </div>
+        <div class="setting-line">
           <label for="fallback-wait">Espera de respaldo si Claude no muestra una hora</label>
           <select id="fallback-wait">
             <option value="300">5 horas</option>
