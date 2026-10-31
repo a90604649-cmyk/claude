@@ -9,7 +9,8 @@ const {
   Menu,
   shell,
   nativeImage,
-  Tray
+  Tray,
+  powerMonitor
 } = require('electron');
 
 const { AppStore } = require('./services/store');
@@ -19,6 +20,7 @@ const { RecoveryController } = require('./services/recovery-controller');
 const { extractConversationId, buildConversationDeepLink } = require('./services/conversation');
 const { inspectClaudeLimit } = require('./services/limit-detector');
 const { sendContinuationMessage } = require('./services/claude-input');
+const { sanitizeExecutionPolicySettings } = require('./services/execution-policy');
 const {
   setWindowsStartup,
   getWindowsStartupStatus
@@ -296,6 +298,14 @@ function registerIpcHandlers() {
     return getDashboardSnapshot();
   });
 
+  ipcMain.handle('app:set-execution-policy', async (_event, input) => {
+    const policy = sanitizeExecutionPolicySettings(input, store.snapshot().settings);
+    await store.updateSettings(policy);
+    await store.log('info', 'Se actualizaron las reglas de horario escolar y protección de juegos.', policy);
+    recoveryController?.schedule();
+    return getDashboardSnapshot();
+  });
+
   ipcMain.handle('app:check-now', async () => {
     const result = await scheduler.checkNow('manual');
     return getDashboardSnapshot({ processCheck: result.processCheck });
@@ -446,6 +456,11 @@ if (hasSingleInstance) {
 
     registerIpcHandlers();
     createTray();
+    powerMonitor.on('resume', () => {
+      recoveryController?.onSystemResume().catch((error) => {
+        store?.log('error', 'No se pudo programar la comprobación después de reactivar Windows.', { reason: error.message });
+      });
+    });
     await scheduler.start();
     createMainWindow({ hidden: startedAtLogin });
     await recoveryController.start();
